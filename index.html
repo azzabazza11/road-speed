@@ -1,0 +1,1144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+  <meta name="theme-color" content="#0b1220" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Road Speed" />
+  <meta name="description" content="GPS speedometer with learned speed zones and a casual overspeed ding." />
+  <link rel="manifest" href="./manifest.webmanifest" />
+  <link rel="icon" href="./icon.svg" type="image/svg+xml" />
+  <link rel="apple-touch-icon" href="./icon.svg" />
+  <title>Road Speed</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@450;600;700;800&family=IBM+Plex+Mono:wght@500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #0b1220;
+      --panel: #121a2b;
+      --ink: #e8eefc;
+      --muted: #8b9bb8;
+      --line: #243149;
+      --accent: #3dd6c6;
+      --warn: #f0b429;
+      --bad: #ff5d5d;
+      --ok: #3dd6c6;
+      --chip: #1a2438;
+      --safe-t: env(safe-area-inset-top, 0px);
+      --safe-b: env(safe-area-inset-bottom, 0px);
+      --safe-l: env(safe-area-inset-left, 0px);
+      --safe-r: env(safe-area-inset-right, 0px);
+      --tap: 48px;
+      --radius: 18px;
+    }
+
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body {
+      margin: 0;
+      min-height: 100%;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: "Outfit", system-ui, sans-serif;
+      font-weight: 450;
+    }
+    body {
+      padding:
+        calc(10px + var(--safe-t))
+        calc(14px + var(--safe-r))
+        calc(16px + var(--safe-b))
+        calc(14px + var(--safe-l));
+    }
+    button, input, select { font: inherit; color: inherit; }
+    button {
+      cursor: pointer;
+      border: 0;
+      background: none;
+    }
+    .mono { font-family: "IBM Plex Mono", ui-monospace, monospace; }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 12px;
+      min-height: var(--tap);
+    }
+    .topbar h1 {
+      margin: 0;
+      font-size: 1.15rem;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      flex: 1;
+    }
+    .icon-btn {
+      width: var(--tap);
+      height: var(--tap);
+      border-radius: 14px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      display: grid;
+      place-items: center;
+      color: var(--muted);
+      font-size: 1.1rem;
+    }
+    .icon-btn:active { transform: scale(0.96); }
+    .icon-btn.on { color: var(--accent); border-color: #2a6b63; }
+
+    .speed-wrap {
+      background: radial-gradient(circle at 50% 30%, #162038 0%, var(--panel) 55%, #0e1626 100%);
+      border: 1px solid var(--line);
+      border-radius: 28px;
+      padding: 28px 18px 22px;
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+      margin-bottom: 14px;
+    }
+    .speed-wrap.over {
+      border-color: #7a3030;
+      box-shadow: inset 0 0 0 1px rgba(255, 93, 93, 0.25);
+    }
+    .speed-label {
+      color: var(--muted);
+      font-size: 0.85rem;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      margin-bottom: 4px;
+    }
+    .speed-num {
+      font-family: "IBM Plex Mono", ui-monospace, monospace;
+      font-weight: 700;
+      font-size: clamp(5.5rem, 28vw, 8rem);
+      line-height: 0.92;
+      letter-spacing: -0.04em;
+      margin: 0;
+    }
+    .speed-unit {
+      color: var(--muted);
+      font-size: 1.05rem;
+      margin-top: 4px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+    .limit-row {
+      display: flex;
+      justify-content: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-top: 18px;
+    }
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 14px;
+      border-radius: 999px;
+      background: var(--chip);
+      border: 1px solid var(--line);
+      color: var(--muted);
+      font-size: 0.92rem;
+    }
+    .pill strong { color: var(--ink); font-weight: 700; }
+    .pill.ok { border-color: #2a6b63; color: var(--ok); }
+    .pill.warn { border-color: #7a5a18; color: var(--warn); }
+    .pill.bad { border-color: #7a3030; color: var(--bad); }
+
+    .controls {
+      display: grid;
+      grid-template-columns: 1.4fr 1fr;
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+    .btn {
+      min-height: 56px;
+      border-radius: 16px;
+      padding: 12px 16px;
+      font-weight: 700;
+      border: 1px solid var(--line);
+      background: var(--panel);
+    }
+    .btn:active { transform: scale(0.98); }
+    .btn.primary {
+      background: linear-gradient(180deg, #2bb8aa, #1f8f84);
+      border-color: #2a6b63;
+      color: #041714;
+    }
+    .btn.danger {
+      background: #2a1518;
+      border-color: #7a3030;
+      color: #ffb4b4;
+    }
+    .btn.ghost { color: var(--muted); }
+    .btn:disabled { opacity: 0.45; }
+
+    .status {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-bottom: 14px;
+      color: var(--muted);
+      font-size: 0.88rem;
+    }
+    .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #4a5568;
+      display: inline-block;
+    }
+    .dot.live { background: var(--accent); box-shadow: 0 0 0 4px rgba(61, 214, 198, 0.15); }
+    .dot.warn { background: var(--warn); }
+    .dot.bad { background: var(--bad); }
+
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 14px;
+      margin-bottom: 12px;
+    }
+    .panel h2 {
+      margin: 0 0 10px;
+      font-size: 0.95rem;
+      font-weight: 700;
+    }
+    .meta {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      font-size: 0.88rem;
+      color: var(--muted);
+    }
+    .meta div {
+      background: var(--chip);
+      border-radius: 12px;
+      padding: 10px 12px;
+      border: 1px solid var(--line);
+    }
+    .meta b {
+      display: block;
+      color: var(--ink);
+      font-family: "IBM Plex Mono", ui-monospace, monospace;
+      font-size: 1.05rem;
+      margin-top: 2px;
+    }
+
+    .log {
+      max-height: 180px;
+      overflow: auto;
+      font-family: "IBM Plex Mono", ui-monospace, monospace;
+      font-size: 0.78rem;
+      color: var(--muted);
+      line-height: 1.45;
+    }
+    .log .row { padding: 4px 0; border-bottom: 1px solid #1a2438; }
+    .log .row:last-child { border-bottom: 0; }
+
+    .zones { display: grid; gap: 8px; }
+    .zone {
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      gap: 10px;
+      align-items: center;
+      padding: 10px 12px;
+      border-radius: 14px;
+      background: var(--chip);
+      border: 1px solid var(--line);
+      font-size: 0.88rem;
+    }
+    .zone .badge {
+      width: 46px;
+      height: 46px;
+      border-radius: 12px;
+      display: grid;
+      place-items: center;
+      font-family: "IBM Plex Mono", ui-monospace, monospace;
+      font-weight: 700;
+      background: #0f1728;
+      border: 1px solid var(--line);
+    }
+    .zone .badge.confirmed { border-color: #2a6b63; color: var(--ok); }
+    .zone .badge.guess { border-color: #7a5a18; color: var(--warn); }
+    .zone .sub { color: var(--muted); font-size: 0.78rem; margin-top: 2px; }
+    .zone button {
+      min-height: 40px;
+      padding: 0 12px;
+      border-radius: 10px;
+      background: #0f1728;
+      border: 1px solid var(--line);
+      color: var(--muted);
+      font-size: 0.8rem;
+      font-weight: 600;
+    }
+
+    .settings label {
+      display: grid;
+      gap: 6px;
+      margin-bottom: 12px;
+      font-size: 0.9rem;
+      color: var(--muted);
+    }
+    .settings input[type="number"],
+    .settings select {
+      min-height: 48px;
+      border-radius: 12px;
+      border: 1px solid var(--line);
+      background: var(--chip);
+      padding: 0 12px;
+      color: var(--ink);
+    }
+    .settings .row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 12px;
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+    .toggle {
+      width: 52px;
+      height: 32px;
+      border-radius: 999px;
+      background: #243149;
+      border: 1px solid var(--line);
+      position: relative;
+      flex: 0 0 auto;
+    }
+    .toggle::after {
+      content: "";
+      position: absolute;
+      top: 3px;
+      left: 3px;
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background: #8b9bb8;
+      transition: transform .18s ease, background .18s ease;
+    }
+    .toggle.on { background: #1f8f84; border-color: #2a6b63; }
+    .toggle.on::after { transform: translateX(20px); background: #e8eefc; }
+
+    .screen { display: none; }
+    .screen.active { display: block; animation: fade .2s ease; }
+    @keyframes fade {
+      from { opacity: 0; transform: translateY(6px); }
+      to { opacity: 1; transform: none; }
+    }
+
+    .prompt {
+      position: fixed;
+      inset: 0;
+      background: rgba(4, 8, 16, 0.72);
+      display: none;
+      align-items: flex-end;
+      justify-content: center;
+      padding:
+        calc(16px + var(--safe-t))
+        calc(14px + var(--safe-r))
+        calc(18px + var(--safe-b))
+        calc(14px + var(--safe-l));
+      z-index: 40;
+    }
+    .prompt.show { display: flex; }
+    .prompt-card {
+      width: min(420px, 100%);
+      background: #141d30;
+      border: 1px solid var(--line);
+      border-radius: 24px;
+      padding: 18px;
+      box-shadow: 0 -12px 40px rgba(0,0,0,.35);
+    }
+    .prompt-card h3 {
+      margin: 0 0 6px;
+      font-size: 1.15rem;
+    }
+    .prompt-card p {
+      margin: 0 0 14px;
+      color: var(--muted);
+      font-size: 0.92rem;
+      line-height: 1.4;
+    }
+    .limit-btns {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+    .limit-btns button {
+      min-height: 72px;
+      border-radius: 18px;
+      background: #0f1728;
+      border: 1px solid var(--line);
+      font-family: "IBM Plex Mono", ui-monospace, monospace;
+      font-size: 1.6rem;
+      font-weight: 700;
+    }
+    .limit-btns button:active {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+    .prompt-actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
+    .alarm-bar {
+      display: none;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+    .alarm-bar.show { display: grid; grid-template-columns: 1fr auto; }
+    .alarm-msg {
+      min-height: 52px;
+      border-radius: 14px;
+      background: #2a1518;
+      border: 1px solid #7a3030;
+      color: #ffb4b4;
+      display: flex;
+      align-items: center;
+      padding: 0 14px;
+      font-weight: 700;
+    }
+
+    .hint {
+      color: var(--muted);
+      font-size: 0.82rem;
+      line-height: 1.4;
+      margin: 0;
+    }
+    .empty {
+      color: var(--muted);
+      font-size: 0.88rem;
+      padding: 8px 2px;
+    }
+  </style>
+</head>
+<body>
+  <div id="drive" class="screen active">
+    <div class="topbar">
+      <h1>Road Speed</h1>
+      <button class="icon-btn" id="btnZones" title="Zones" aria-label="Zones">◎</button>
+      <button class="icon-btn" id="btnSettings" title="Settings" aria-label="Settings">⚙</button>
+    </div>
+
+    <div class="alarm-bar" id="alarmBar">
+      <div class="alarm-msg" id="alarmMsg">Over limit</div>
+      <button class="btn danger" id="btnSilence">Silence</button>
+    </div>
+
+    <div class="speed-wrap" id="speedWrap">
+      <div class="speed-label">Current speed</div>
+      <p class="speed-num mono" id="speedNum">—</p>
+      <div class="speed-unit">km/h</div>
+      <div class="limit-row">
+        <span class="pill" id="limitPill"><strong id="limitVal">—</strong> limit</span>
+        <span class="pill" id="guessPill" style="display:none">guess <strong id="guessVal">—</strong></span>
+        <span class="pill" id="accPill">± <strong id="accVal">—</strong> m</span>
+      </div>
+    </div>
+
+    <div class="controls">
+      <button class="btn primary" id="btnTrack">Start tracking</button>
+      <button class="btn ghost" id="btnConfirmNow" disabled>Confirm limit</button>
+    </div>
+
+    <div class="status">
+      <span><span class="dot" id="gpsDot"></span> <span id="gpsStatus">GPS idle</span></span>
+      <span id="tripStatus">Trip 0.0 km</span>
+      <span id="zoneStatus">No zone yet</span>
+    </div>
+
+    <div class="panel">
+      <h2>Live stats</h2>
+      <div class="meta">
+        <div>Max this trip<b id="maxSpeed">0</b></div>
+        <div>Samples<b id="sampleCount">0</b></div>
+        <div>Lat<b id="latVal">—</b></div>
+        <div>Lng<b id="lngVal">—</b></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Recent log</h2>
+      <div class="log" id="recentLog"><div class="empty">Start tracking to record speed + GPS.</div></div>
+    </div>
+  </div>
+
+  <div id="zones" class="screen">
+    <div class="topbar">
+      <button class="icon-btn" id="btnBackZones" aria-label="Back">←</button>
+      <h1>Speed zones</h1>
+      <button class="icon-btn" id="btnClearZones" title="Clear guesses" aria-label="Clear guesses">⌫</button>
+    </div>
+    <div class="panel">
+      <p class="hint">Drive the same legs a few times. The app estimates a limit from your cruise speeds, then asks you to confirm with 60 / 80 / 100.</p>
+    </div>
+    <div class="panel">
+      <h2>Mapped areas</h2>
+      <div class="zones" id="zoneList"><div class="empty">No zones yet — go for a drive.</div></div>
+    </div>
+  </div>
+
+  <div id="settings" class="screen">
+    <div class="topbar">
+      <button class="icon-btn" id="btnBackSettings" aria-label="Back">←</button>
+      <h1>Settings</h1>
+    </div>
+    <div class="panel settings">
+      <label>
+        Over-limit buffer (km/h)
+        <input type="number" id="overBuffer" min="0" max="20" step="1" />
+      </label>
+      <label>
+        Seconds over before ding
+        <input type="number" id="overDelay" min="0" max="30" step="1" />
+      </label>
+      <label>
+        Ding interval (seconds)
+        <input type="number" id="dingInterval" min="2" max="15" step="1" />
+      </label>
+      <div class="row">
+        <span>Warnings enabled</span>
+        <button class="toggle on" id="warnToggle" type="button" aria-pressed="true"></button>
+      </div>
+      <div class="row">
+        <span>Keep screen awake</span>
+        <button class="toggle on" id="wakeToggle" type="button" aria-pressed="true"></button>
+      </div>
+      <p class="hint">Alarm is a single soft ding while over the confirmed limit. Silence mutes until you drop back under (or tap Silence again).</p>
+      <button class="btn ghost" id="btnTestDing" style="width:100%;margin-top:8px">Test ding</button>
+      <button class="btn danger" id="btnResetData" style="width:100%;margin-top:8px">Reset all trip data</button>
+    </div>
+    <div class="panel">
+      <p class="hint">Version 1.0.0 · Data stays on this phone (localStorage). Needs HTTPS + location permission.</p>
+    </div>
+  </div>
+
+  <div class="prompt" id="limitPrompt" role="dialog" aria-modal="true" aria-labelledby="promptTitle">
+    <div class="prompt-card">
+      <h3 id="promptTitle">What is the limit here?</h3>
+      <p id="promptBody">Looks like a steady cruise zone. Tap the posted speed to confirm.</p>
+      <div class="limit-btns">
+        <button type="button" data-limit="60">60</button>
+        <button type="button" data-limit="80">80</button>
+        <button type="button" data-limit="100">100</button>
+      </div>
+      <div class="prompt-actions">
+        <button class="btn ghost" id="promptSkip">Not now</button>
+        <button class="btn ghost" id="promptOther">50 / 70 / 90…</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const VERSION = '1.0.0';
+    const STORE_KEY = 'road-speed-v1';
+    const CELL_DEG = 0.0009; // ~100 m
+    const COMMON_LIMITS = [50, 60, 70, 80, 90, 100];
+    const PROMPT_LIMITS = [60, 80, 100];
+    const MIN_MOVE_KMH = 12;
+    const MIN_SAMPLES_FOR_GUESS = 18;
+    const MIN_VISITS_FOR_PROMPT = 2;
+    const LOG_CAP = 80;
+    const SAMPLE_MIN_MS = 900;
+
+    const $ = id => document.getElementById(id);
+
+    const defaultState = () => ({
+      settings: {
+        overBuffer: 3,
+        overDelay: 4,
+        dingInterval: 5,
+        warnings: true,
+        wakeLock: true
+      },
+      cells: {},
+      recent: [],
+      promptSkipUntil: {}
+    });
+
+    let state = loadState();
+    let tracking = false;
+    let watchId = null;
+    let wakeLock = null;
+    let lastSampleAt = 0;
+    let lastPos = null;
+    let tripMeters = 0;
+    let maxSpeed = 0;
+    let sampleCount = 0;
+    let currentCellId = null;
+    let overSince = null;
+    let silenced = false;
+    let lastDingAt = 0;
+    let audioCtx = null;
+    let promptCellId = null;
+
+    function loadState() {
+      try {
+        const raw = localStorage.getItem(STORE_KEY);
+        if (!raw) return defaultState();
+        const parsed = JSON.parse(raw);
+        return {
+          ...defaultState(),
+          ...parsed,
+          settings: { ...defaultState().settings, ...(parsed.settings || {}) },
+          cells: parsed.cells || {},
+          recent: parsed.recent || [],
+          promptSkipUntil: parsed.promptSkipUntil || {}
+        };
+      } catch {
+        return defaultState();
+      }
+    }
+
+    function saveState() {
+      localStorage.setItem(STORE_KEY, JSON.stringify(state));
+    }
+
+    function showScreen(name) {
+      ['drive', 'zones', 'settings'].forEach(id => {
+        $(id).classList.toggle('active', id === name);
+      });
+    }
+
+    function cellId(lat, lng) {
+      const rLat = Math.round(lat / CELL_DEG);
+      const rLng = Math.round(lng / CELL_DEG);
+      return rLat + ':' + rLng;
+    }
+
+    function cellCenter(id) {
+      const [rLat, rLng] = id.split(':').map(Number);
+      return { lat: rLat * CELL_DEG, lng: rLng * CELL_DEG };
+    }
+
+    function haversine(a, b) {
+      const R = 6371000;
+      const toRad = d => d * Math.PI / 180;
+      const dLat = toRad(b.lat - a.lat);
+      const dLng = toRad(b.lng - a.lng);
+      const lat1 = toRad(a.lat);
+      const lat2 = toRad(b.lat);
+      const h = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
+      return 2 * R * Math.asin(Math.sqrt(h));
+    }
+
+    function kmhFromCoords(coords, prev, dtMs) {
+      if (typeof coords.speed === 'number' && coords.speed >= 0 && !Number.isNaN(coords.speed)) {
+        return coords.speed * 3.6;
+      }
+      if (prev && dtMs > 400) {
+        const m = haversine(prev, { lat: coords.latitude, lng: coords.longitude });
+        return (m / (dtMs / 1000)) * 3.6;
+      }
+      return 0;
+    }
+
+    function nearestLimit(speed) {
+      let best = COMMON_LIMITS[0];
+      let bestDiff = Infinity;
+      for (const lim of COMMON_LIMITS) {
+        // Prefer matching a posted limit slightly above cruise, not below
+        const diff = Math.abs(lim - (speed + 4));
+        if (diff < bestDiff) {
+          bestDiff = diff;
+          best = lim;
+        }
+      }
+      return best;
+    }
+
+    function median(nums) {
+      if (!nums.length) return 0;
+      const s = [...nums].sort((a, b) => a - b);
+      const mid = Math.floor(s.length / 2);
+      return s.length % 2 ? s[mid] : (s[mid - 1] + s[mid]) / 2;
+    }
+
+    function ensureCell(id) {
+      if (!state.cells[id]) {
+        state.cells[id] = {
+          id,
+          speeds: [],
+          visits: 0,
+          lastSeen: 0,
+          guess: null,
+          confirmed: null,
+          lastVisitDay: null
+        };
+      }
+      return state.cells[id];
+    }
+
+    function updateGuess(cell) {
+      const cruise = cell.speeds.filter(s => s >= 25 && s <= 120);
+      if (cruise.length < MIN_SAMPLES_FOR_GUESS) {
+        cell.guess = null;
+        return;
+      }
+      cell.guess = nearestLimit(median(cruise));
+    }
+
+    function formatKm(m) {
+      return (m / 1000).toFixed(1);
+    }
+
+    function setGpsStatus(text, mode) {
+      $('gpsStatus').textContent = text;
+      const dot = $('gpsDot');
+      dot.className = 'dot' + (mode ? ' ' + mode : '');
+    }
+
+    function renderSettings() {
+      $('overBuffer').value = state.settings.overBuffer;
+      $('overDelay').value = state.settings.overDelay;
+      $('dingInterval').value = state.settings.dingInterval;
+      $('warnToggle').classList.toggle('on', state.settings.warnings);
+      $('warnToggle').setAttribute('aria-pressed', String(state.settings.warnings));
+      $('wakeToggle').classList.toggle('on', state.settings.wakeLock);
+      $('wakeToggle').setAttribute('aria-pressed', String(state.settings.wakeLock));
+    }
+
+    function renderLog() {
+      const box = $('recentLog');
+      if (!state.recent.length) {
+        box.innerHTML = '<div class="empty">Start tracking to record speed + GPS.</div>';
+        return;
+      }
+      box.innerHTML = state.recent.slice(0, 40).map(r => {
+        const t = new Date(r.t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        return `<div class="row">${t} · ${r.kmh.toFixed(0)} km/h · ${r.lat.toFixed(5)}, ${r.lng.toFixed(5)}</div>`;
+      }).join('');
+    }
+
+    function renderZones() {
+      const list = Object.values(state.cells)
+        .filter(c => c.confirmed || c.guess || c.speeds.length >= 8)
+        .sort((a, b) => (b.lastSeen || 0) - (a.lastSeen || 0));
+
+      const box = $('zoneList');
+      if (!list.length) {
+        box.innerHTML = '<div class="empty">No zones yet — go for a drive.</div>';
+        return;
+      }
+
+      box.innerHTML = list.map(c => {
+        const limit = c.confirmed || c.guess || '—';
+        const kind = c.confirmed ? 'confirmed' : (c.guess ? 'guess' : '');
+        const label = c.confirmed ? 'Confirmed' : (c.guess ? 'Estimated' : 'Learning');
+        const center = cellCenter(c.id);
+        return `<div class="zone" data-id="${c.id}">
+          <div class="badge ${kind}">${limit}</div>
+          <div>
+            <div>${label} · ${c.visits} visit${c.visits === 1 ? '' : 's'}</div>
+            <div class="sub">${center.lat.toFixed(4)}, ${center.lng.toFixed(4)} · ${c.speeds.length} samples</div>
+          </div>
+          <button type="button" data-edit="${c.id}">Set</button>
+        </div>`;
+      }).join('');
+    }
+
+    function renderDriveUI(payload) {
+      const kmh = payload?.kmh;
+      const acc = payload?.accuracy;
+      const lat = payload?.lat;
+      const lng = payload?.lng;
+      const cell = currentCellId ? state.cells[currentCellId] : null;
+
+      if (typeof kmh === 'number') {
+        $('speedNum').textContent = Math.round(kmh).toString();
+      }
+
+      const confirmed = cell?.confirmed ?? null;
+      const guess = cell?.guess ?? null;
+      $('limitVal').textContent = confirmed != null ? confirmed : '—';
+      const limitPill = $('limitPill');
+      limitPill.className = 'pill' + (confirmed != null ? ' ok' : '');
+
+      if (guess != null && confirmed == null) {
+        $('guessPill').style.display = '';
+        $('guessVal').textContent = guess;
+        $('guessPill').className = 'pill warn';
+      } else {
+        $('guessPill').style.display = 'none';
+      }
+
+      if (typeof acc === 'number') $('accVal').textContent = Math.round(acc);
+      if (typeof lat === 'number') $('latVal').textContent = lat.toFixed(5);
+      if (typeof lng === 'number') $('lngVal').textContent = lng.toFixed(5);
+      $('maxSpeed').textContent = Math.round(maxSpeed).toString();
+      $('sampleCount').textContent = String(sampleCount);
+      $('tripStatus').textContent = 'Trip ' + formatKm(tripMeters) + ' km';
+
+      if (cell) {
+        const label = cell.confirmed != null
+          ? ('Zone ' + cell.confirmed + ' confirmed')
+          : (cell.guess != null ? ('Zone guess ' + cell.guess) : 'Learning this leg');
+        $('zoneStatus').textContent = label;
+      } else {
+        $('zoneStatus').textContent = 'No zone yet';
+      }
+
+      $('btnConfirmNow').disabled = !currentCellId;
+      updateOverUI(typeof kmh === 'number' ? kmh : 0, confirmed);
+    }
+
+    function updateOverUI(kmh, confirmed) {
+      const wrap = $('speedWrap');
+      const bar = $('alarmBar');
+      if (!state.settings.warnings || confirmed == null) {
+        wrap.classList.remove('over');
+        bar.classList.remove('show');
+        overSince = null;
+        return;
+      }
+
+      const threshold = confirmed + state.settings.overBuffer;
+      const over = kmh > threshold;
+      wrap.classList.toggle('over', over);
+
+      if (!over) {
+        overSince = null;
+        silenced = false;
+        bar.classList.remove('show');
+        return;
+      }
+
+      if (!overSince) overSince = Date.now();
+      const waited = (Date.now() - overSince) / 1000;
+      if (waited < state.settings.overDelay) {
+        bar.classList.remove('show');
+        return;
+      }
+
+      bar.classList.add('show');
+      $('alarmMsg').textContent = silenced
+        ? ('Over ' + confirmed + ' · silenced')
+        : ('Over ' + confirmed + ' · ' + Math.round(kmh) + ' km/h');
+
+      if (!silenced) maybeDing();
+    }
+
+    function ensureAudio() {
+      if (!audioCtx) {
+        const Ctx = window.AudioContext || window.webkitAudioContext;
+        if (!Ctx) return null;
+        audioCtx = new Ctx();
+      }
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+      return audioCtx;
+    }
+
+    function playDing() {
+      const ctx = ensureAudio();
+      if (!ctx) return;
+      const now = ctx.currentTime;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(880, now);
+      osc.frequency.exponentialRampToValueAtTime(660, now + 0.12);
+      gain.gain.setValueAtTime(0.0001, now);
+      gain.gain.exponentialRampToValueAtTime(0.18, now + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.28);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(now);
+      osc.stop(now + 0.3);
+    }
+
+    function maybeDing() {
+      const intervalMs = Math.max(2, state.settings.dingInterval) * 1000;
+      const now = Date.now();
+      if (now - lastDingAt < intervalMs) return;
+      lastDingAt = now;
+      playDing();
+    }
+
+    async function requestWakeLock() {
+      if (!state.settings.wakeLock || !('wakeLock' in navigator)) return;
+      try {
+        wakeLock = await navigator.wakeLock.request('screen');
+        wakeLock.addEventListener('release', () => { wakeLock = null; });
+      } catch {
+        /* ignore */
+      }
+    }
+
+    function releaseWakeLock() {
+      if (wakeLock) {
+        wakeLock.release().catch(() => {});
+        wakeLock = null;
+      }
+    }
+
+    function maybePrompt(cell) {
+      if (!cell || cell.confirmed != null) return;
+      if (!cell.guess) return;
+      if (cell.visits < MIN_VISITS_FOR_PROMPT) return;
+      if (cell.speeds.length < MIN_SAMPLES_FOR_GUESS) return;
+      const skipUntil = state.promptSkipUntil[cell.id] || 0;
+      if (Date.now() < skipUntil) return;
+      if ($('limitPrompt').classList.contains('show')) return;
+      openPrompt(cell.id, cell.guess);
+    }
+
+    function openPrompt(id, guess) {
+      promptCellId = id;
+      $('promptBody').textContent = guess
+        ? ('Cruise looks like about ' + guess + ' km/h here. Tap the posted limit.')
+        : 'Tap the posted limit for this stretch.';
+      $('limitPrompt').classList.add('show');
+    }
+
+    function closePrompt() {
+      $('limitPrompt').classList.remove('show');
+      promptCellId = null;
+    }
+
+    function confirmLimit(limit) {
+      if (!promptCellId) return;
+      const cell = ensureCell(promptCellId);
+      cell.confirmed = limit;
+      cell.guess = limit;
+      saveState();
+      closePrompt();
+      renderZones();
+      renderDriveUI({
+        kmh: Number($('speedNum').textContent) || 0,
+        accuracy: Number($('accVal').textContent) || undefined,
+        lat: lastPos?.lat,
+        lng: lastPos?.lng
+      });
+    }
+
+    function noteVisit(cell) {
+      const day = new Date().toISOString().slice(0, 10);
+      if (cell.lastVisitDay !== day) {
+        cell.visits += 1;
+        cell.lastVisitDay = day;
+      }
+    }
+
+    function onPosition(pos) {
+      const now = Date.now();
+      const { latitude: lat, longitude: lng, accuracy } = pos.coords;
+      const prev = lastPos;
+      const dt = prev ? now - prev.t : 0;
+      const kmh = kmhFromCoords(pos.coords, prev, dt);
+      const moving = kmh >= MIN_MOVE_KMH;
+
+      if (prev) tripMeters += haversine(prev, { lat, lng });
+      lastPos = { lat, lng, t: now, kmh };
+
+      if (kmh > maxSpeed) maxSpeed = kmh;
+
+      renderDriveUI({ kmh, accuracy, lat, lng });
+      setGpsStatus(moving ? 'GPS live' : 'GPS ready', moving ? 'live' : 'warn');
+
+      if (now - lastSampleAt < SAMPLE_MIN_MS) return;
+      lastSampleAt = now;
+
+      const id = cellId(lat, lng);
+      currentCellId = id;
+      const cell = ensureCell(id);
+      cell.lastSeen = now;
+      noteVisit(cell);
+
+      if (moving && typeof accuracy === 'number' && accuracy <= 45) {
+        cell.speeds.push(Math.round(kmh));
+        if (cell.speeds.length > 120) cell.speeds = cell.speeds.slice(-120);
+        updateGuess(cell);
+        sampleCount += 1;
+
+        state.recent.unshift({
+          t: now,
+          kmh,
+          lat,
+          lng,
+          acc: accuracy,
+          cell: id
+        });
+        if (state.recent.length > LOG_CAP) state.recent.length = LOG_CAP;
+        saveState();
+        renderLog();
+        maybePrompt(cell);
+      }
+
+      renderDriveUI({ kmh, accuracy, lat, lng });
+    }
+
+    function onGeoError(err) {
+      setGpsStatus(err.code === 1 ? 'Location denied' : 'GPS error', 'bad');
+    }
+
+    function startTracking() {
+      if (!('geolocation' in navigator)) {
+        setGpsStatus('No geolocation', 'bad');
+        return;
+      }
+      ensureAudio();
+      tracking = true;
+      $('btnTrack').textContent = 'Stop tracking';
+      $('btnTrack').classList.remove('primary');
+      $('btnTrack').classList.add('danger');
+      setGpsStatus('Acquiring GPS…', 'warn');
+      requestWakeLock();
+
+      watchId = navigator.geolocation.watchPosition(onPosition, onGeoError, {
+        enableHighAccuracy: true,
+        maximumAge: 1000,
+        timeout: 15000
+      });
+    }
+
+    function stopTracking() {
+      tracking = false;
+      if (watchId != null) {
+        navigator.geolocation.clearWatch(watchId);
+        watchId = null;
+      }
+      releaseWakeLock();
+      $('btnTrack').textContent = 'Start tracking';
+      $('btnTrack').classList.add('primary');
+      $('btnTrack').classList.remove('danger');
+      setGpsStatus('GPS idle', '');
+      overSince = null;
+      $('alarmBar').classList.remove('show');
+      $('speedWrap').classList.remove('over');
+    }
+
+    // Events
+    $('btnTrack').addEventListener('click', () => {
+      if (tracking) stopTracking();
+      else startTracking();
+    });
+
+    $('btnSilence').addEventListener('click', () => {
+      silenced = !silenced;
+      $('alarmMsg').textContent = silenced ? 'Silenced until under limit' : 'Alarm active';
+    });
+
+    $('btnZones').addEventListener('click', () => {
+      renderZones();
+      showScreen('zones');
+    });
+    $('btnSettings').addEventListener('click', () => {
+      renderSettings();
+      showScreen('settings');
+    });
+    $('btnBackZones').addEventListener('click', () => showScreen('drive'));
+    $('btnBackSettings').addEventListener('click', () => showScreen('drive'));
+
+    $('btnConfirmNow').addEventListener('click', () => {
+      if (!currentCellId) return;
+      const cell = ensureCell(currentCellId);
+      openPrompt(currentCellId, cell.guess || cell.confirmed);
+    });
+
+    document.querySelectorAll('#limitPrompt [data-limit]').forEach(btn => {
+      btn.addEventListener('click', () => confirmLimit(Number(btn.dataset.limit)));
+    });
+
+    $('promptSkip').addEventListener('click', () => {
+      if (promptCellId) {
+        state.promptSkipUntil[promptCellId] = Date.now() + 30 * 60 * 1000;
+        saveState();
+      }
+      closePrompt();
+    });
+
+    $('promptOther').addEventListener('click', () => {
+      const raw = prompt('Enter limit km/h (e.g. 50, 70, 90):', '50');
+      const n = Number(raw);
+      if (!raw || Number.isNaN(n) || n < 10 || n > 130) return;
+      confirmLimit(Math.round(n));
+    });
+
+    $('zoneList').addEventListener('click', e => {
+      const btn = e.target.closest('[data-edit]');
+      if (!btn) return;
+      openPrompt(btn.dataset.edit, state.cells[btn.dataset.edit]?.guess);
+    });
+
+    $('btnClearZones').addEventListener('click', () => {
+      if (!confirm('Clear estimated (unconfirmed) zones? Confirmed limits stay.')) return;
+      Object.values(state.cells).forEach(c => {
+        if (c.confirmed == null) {
+          c.guess = null;
+          c.speeds = [];
+          c.visits = 0;
+        }
+      });
+      saveState();
+      renderZones();
+    });
+
+    function bindNum(id, key, min, max) {
+      $(id).addEventListener('change', () => {
+        let v = Number($(id).value);
+        if (Number.isNaN(v)) v = state.settings[key];
+        state.settings[key] = Math.min(max, Math.max(min, v));
+        saveState();
+        renderSettings();
+      });
+    }
+    bindNum('overBuffer', 'overBuffer', 0, 20);
+    bindNum('overDelay', 'overDelay', 0, 30);
+    bindNum('dingInterval', 'dingInterval', 2, 15);
+
+    $('warnToggle').addEventListener('click', () => {
+      state.settings.warnings = !state.settings.warnings;
+      saveState();
+      renderSettings();
+    });
+    $('wakeToggle').addEventListener('click', () => {
+      state.settings.wakeLock = !state.settings.wakeLock;
+      saveState();
+      renderSettings();
+      if (tracking && state.settings.wakeLock) requestWakeLock();
+      if (!state.settings.wakeLock) releaseWakeLock();
+    });
+
+    $('btnTestDing').addEventListener('click', () => {
+      ensureAudio();
+      playDing();
+    });
+
+    $('btnResetData').addEventListener('click', () => {
+      if (!confirm('Reset all GPS samples, zones, and logs on this phone?')) return;
+      state = defaultState();
+      saveState();
+      tripMeters = 0;
+      maxSpeed = 0;
+      sampleCount = 0;
+      currentCellId = null;
+      lastPos = null;
+      renderLog();
+      renderZones();
+      renderSettings();
+      renderDriveUI({});
+      $('speedNum').textContent = '—';
+    });
+
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible' && tracking) requestWakeLock();
+    });
+
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('./service-worker.js').catch(() => {});
+    }
+
+    renderSettings();
+    renderLog();
+    renderZones();
+    renderDriveUI({});
+  </script>
+</body>
+</html>
