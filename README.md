@@ -39,6 +39,15 @@ Open **http://localhost:8080/** — geolocation needs a **secure context** (`htt
 - First run **teaches** entrance/exit; later runs can **auto-start/end** (toggle in Settings)
 - Saved corridors listed under **Zones → Average speed corridors**
 
+### Recorded map
+
+- **Map** screen (top bar) shows everything on a dark basemap
+- **GPS track** — path recorded while tracking (colour = speed)
+- **Limit zones** — learned/confirmed cells with limit badges
+- **Avg corridors** — taught average camera legs (start/end markers)
+- **Journeys** — logbook start/end points
+- Toggle layers on/off; tap markers for details
+
 ### Overspeed ding
 
 - Uses **confirmed** limits only
@@ -68,4 +77,4 @@ Open **http://localhost:8080/** — geolocation needs a **secure context** (`htt
 3. **Install** / Add to Home screen
 4. Stuck on an old cache? **Reload**
 
-Version: **1.2.0**
+Version: **1.3.0**

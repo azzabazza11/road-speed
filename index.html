@@ -17,6 +17,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@450;600;700;800&family=IBM+Plex+Mono:wght@500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
   <style>
     :root {
       --bg: #0b1220;
@@ -628,6 +629,113 @@
       transform: translateX(-50%) translateY(0);
       opacity: 1;
     }
+
+    #map.screen.active {
+      display: flex;
+      flex-direction: column;
+      min-height: calc(100vh - var(--safe-t) - var(--safe-b) - 20px);
+    }
+    .map-wrap {
+      position: relative;
+      flex: 1;
+      min-height: 320px;
+      border-radius: 20px;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      margin-bottom: 12px;
+      background: #0a1018;
+    }
+    #mapCanvas {
+      width: 100%;
+      height: 100%;
+      min-height: 320px;
+    }
+    .map-wrap .leaflet-container {
+      background: #0a1018;
+      font-family: "Outfit", system-ui, sans-serif;
+    }
+    .map-legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+    .map-legend span {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.78rem;
+      color: var(--muted);
+      padding: 6px 10px;
+      border-radius: 999px;
+      background: var(--chip);
+      border: 1px solid var(--line);
+    }
+    .map-legend i {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      display: inline-block;
+      flex: 0 0 auto;
+    }
+    .map-stats {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      font-size: 0.88rem;
+      color: var(--muted);
+    }
+    .map-stats div {
+      background: var(--chip);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 10px 12px;
+    }
+    .map-stats b {
+      display: block;
+      color: var(--ink);
+      font-family: "IBM Plex Mono", ui-monospace, monospace;
+      font-size: 1rem;
+      margin-top: 2px;
+    }
+    .map-layers {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+    .map-layers button {
+      min-height: 40px;
+      padding: 0 12px;
+      border-radius: 999px;
+      background: var(--chip);
+      border: 1px solid var(--line);
+      color: var(--muted);
+      font-size: 0.8rem;
+      font-weight: 600;
+    }
+    .map-layers button.on {
+      border-color: #2a6b63;
+      color: var(--accent);
+      background: #12252a;
+    }
+    .limit-pin {
+      width: 34px !important;
+      height: 34px !important;
+      margin-left: -17px !important;
+      margin-top: -17px !important;
+      border-radius: 10px;
+      background: #0f1728;
+      border: 2px solid #2a6b63;
+      color: #3dd6c6;
+      font-family: "IBM Plex Mono", ui-monospace, monospace;
+      font-size: 0.72rem;
+      font-weight: 700;
+      display: grid;
+      place-items: center;
+      box-shadow: 0 2px 10px rgba(0,0,0,.35);
+    }
+    .limit-pin.guess { border-color: #7a5a18; color: #f0b429; }
   </style>
 </head>
 <body>
@@ -636,6 +744,7 @@
       <h1>Road Speed</h1>
       <button class="icon-btn" id="btnInstallTop" title="Install" aria-label="Install app">↓</button>
       <button class="icon-btn" id="btnLogbook" title="Logbook" aria-label="Logbook">📒</button>
+      <button class="icon-btn" id="btnMap" title="Map" aria-label="Map">🗺</button>
       <button class="icon-btn" id="btnZones" title="Zones" aria-label="Zones">◎</button>
       <button class="icon-btn" id="btnSettings" title="Settings" aria-label="Settings">⚙</button>
     </div>
@@ -739,6 +848,39 @@
     </div>
   </div>
 
+  <div id="map" class="screen">
+    <div class="topbar">
+      <button class="icon-btn" id="btnBackMap" aria-label="Back">←</button>
+      <h1>Recorded map</h1>
+      <button class="icon-btn" id="btnMapFit" title="Fit all" aria-label="Fit all">⊞</button>
+    </div>
+    <div class="map-layers" id="mapLayerToggles">
+      <button type="button" class="on" data-layer="track">GPS track</button>
+      <button type="button" class="on" data-layer="limits">Limit zones</button>
+      <button type="button" class="on" data-layer="avg">Avg corridors</button>
+      <button type="button" class="on" data-layer="journeys">Journeys</button>
+    </div>
+    <div class="map-legend">
+      <span><i style="background:#3dd6c6"></i> GPS track</span>
+      <span><i style="background:#f0b429"></i> Avg corridor</span>
+      <span><i style="background:#3dd6c6;border:1px solid #2a6b63"></i> Confirmed limit</span>
+      <span><i style="background:#2ecc71"></i> Journey start</span>
+    </div>
+    <div class="map-wrap">
+      <div id="mapCanvas"></div>
+    </div>
+    <div class="panel">
+      <h2>On this map</h2>
+      <div class="map-stats" id="mapStats">
+        <div>Track points<b id="mapStatTrack">0</b></div>
+        <div>Limit zones<b id="mapStatLimits">0</b></div>
+        <div>Avg corridors<b id="mapStatAvg">0</b></div>
+        <div>Journeys<b id="mapStatJourneys">0</b></div>
+      </div>
+      <p class="hint" id="mapHint" style="margin-top:10px">Shows GPS recorded while tracking, learned limit cells, average camera corridors, and logbook journey endpoints.</p>
+    </div>
+  </div>
+
   <div id="zones" class="screen">
     <div class="topbar">
       <button class="icon-btn" id="btnBackZones" aria-label="Back">←</button>
@@ -805,7 +947,7 @@
       <button class="btn danger" id="btnResetJourneys" style="width:100%;margin-top:8px">Clear tax logbook</button>
     </div>
     <div class="panel">
-      <p class="hint">Version 1.2.0 · Data stays on this phone (localStorage). Needs HTTPS + location permission.</p>
+      <p class="hint">Version 1.3.0 · Data stays on this phone (localStorage). Needs HTTPS + location permission.</p>
       <button class="btn primary" id="btnInstallSettings" style="width:100%;margin-top:8px">Install app</button>
     </div>
   </div>
@@ -855,8 +997,9 @@
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
   <script>
-    const VERSION = '1.2.0';
+    const VERSION = '1.3.0';
     const STORE_KEY = 'road-speed-v1';
     const CELL_DEG = 0.0009; // ~100 m
     const COMMON_LIMITS = [50, 60, 70, 80, 90, 100];
@@ -869,6 +1012,8 @@
     const MIN_SAMPLES_FOR_GUESS = 18;
     const MIN_VISITS_FOR_PROMPT = 2;
     const LOG_CAP = 80;
+    const MAP_TRACK_CAP = 1200;
+    const MAP_TRACK_MIN_M = 35;
     const JOURNEY_CAP = 400;
     const SAMPLE_MIN_MS = 900;
     const AVG_GATE_RADIUS_M = 180;
@@ -890,6 +1035,7 @@
       },
       cells: {},
       recent: [],
+      mapTrack: [],
       promptSkipUntil: {},
       journeys: [],
       activeJourney: null,
@@ -922,6 +1068,9 @@
     let slowSince = null;
     let autoStartedTrack = false;
     let sparseHits = 0;
+    let mapInstance = null;
+    let mapFeatureLayer = null;
+    const mapLayersOn = { track: true, limits: true, avg: true, journeys: true };
 
     function loadState() {
       try {
@@ -934,6 +1083,7 @@
           settings: { ...defaultState().settings, ...(parsed.settings || {}) },
           cells: parsed.cells || {},
           recent: parsed.recent || [],
+          mapTrack: parsed.mapTrack || [],
           promptSkipUntil: parsed.promptSkipUntil || {},
           journeys: parsed.journeys || [],
           activeJourney: parsed.activeJourney || null,
@@ -950,9 +1100,12 @@
     }
 
     function showScreen(name) {
-      ['drive', 'logbook', 'zones', 'settings'].forEach(id => {
+      ['drive', 'logbook', 'map', 'zones', 'settings'].forEach(id => {
         $(id).classList.toggle('active', id === name);
       });
+      if (name === 'map') {
+        setTimeout(() => renderMap(true), 60);
+      }
     }
 
     function uid() {
@@ -1312,6 +1465,227 @@
         const t = new Date(r.t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
         return `<div class="row">${t} · ${r.kmh.toFixed(0)} km/h · ${r.lat.toFixed(5)}, ${r.lng.toFixed(5)}</div>`;
       }).join('');
+    }
+
+    function speedColor(kmh) {
+      if (kmh >= 100) return '#ff5d5d';
+      if (kmh >= 80) return '#f0b429';
+      return '#3dd6c6';
+    }
+
+    function noteMapTrack(lat, lng, kmh) {
+      const pts = state.mapTrack;
+      const last = pts[0];
+      if (last) {
+        const d = haversine({ lat: last.lat, lng: last.lng }, { lat, lng });
+        if (d < MAP_TRACK_MIN_M) return;
+      }
+      pts.unshift({ lat, lng, kmh: Math.round(kmh), t: Date.now() });
+      if (pts.length > MAP_TRACK_CAP) pts.length = MAP_TRACK_CAP;
+    }
+
+    function trackPointsForMap() {
+      const seen = new Set();
+      const pts = [];
+      const add = p => {
+        if (p?.lat == null || p?.lng == null) return;
+        const key = p.lat.toFixed(5) + ',' + p.lng.toFixed(5);
+        if (seen.has(key)) return;
+        seen.add(key);
+        pts.push(p);
+      };
+      for (const p of state.mapTrack) add(p);
+      for (const p of state.recent) add({ lat: p.lat, lng: p.lng, kmh: p.kmh, t: p.t });
+      if (lastPos) add({ lat: lastPos.lat, lng: lastPos.lng, kmh: lastPos.kmh, t: Date.now(), live: true });
+      return pts.sort((a, b) => (a.t || 0) - (b.t || 0));
+    }
+
+    function ensureMap() {
+      if (typeof L === 'undefined') return false;
+      if (!mapInstance) {
+        mapInstance = L.map('mapCanvas', {
+          zoomControl: false,
+          attributionControl: true
+        });
+        L.control.zoom({ position: 'bottomright' }).addTo(mapInstance);
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+          attribution: '&copy; OpenStreetMap &copy; CARTO',
+          maxZoom: 19
+        }).addTo(mapInstance);
+        mapFeatureLayer = L.featureGroup().addTo(mapInstance);
+      }
+      return true;
+    }
+
+    function renderMap(fit = true) {
+      if (!ensureMap()) {
+        $('mapHint').textContent = 'Map tiles could not load — check network and reload.';
+        return;
+      }
+
+      mapFeatureLayer.clearLayers();
+      const bounds = [];
+      const stats = { track: 0, limits: 0, avg: 0, journeys: 0 };
+
+      const trackPts = trackPointsForMap();
+      if (mapLayersOn.track && trackPts.length > 1) {
+        stats.track = trackPts.length;
+        for (let i = 1; i < trackPts.length; i++) {
+          const a = trackPts[i - 1];
+          const b = trackPts[i];
+          const line = L.polyline([[a.lat, a.lng], [b.lat, b.lng]], {
+            color: speedColor(b.kmh || a.kmh || 0),
+            weight: 4,
+            opacity: 0.85,
+            lineCap: 'round'
+          });
+          line.bindPopup(
+            Math.round(b.kmh || a.kmh || 0) + ' km/h<br>' +
+            (b.t ? new Date(b.t).toLocaleString() : '')
+          );
+          mapFeatureLayer.addLayer(line);
+          bounds.push([a.lat, a.lng], [b.lat, b.lng]);
+        }
+        const last = trackPts[trackPts.length - 1];
+        const you = L.circleMarker([last.lat, last.lng], {
+          radius: 8,
+          color: '#e8eefc',
+          fillColor: last.live ? '#3dd6c6' : '#8b9bb8',
+          fillOpacity: 0.95,
+          weight: 2
+        });
+        you.bindPopup(last.live ? 'You are here' : 'Latest track point');
+        mapFeatureLayer.addLayer(you);
+      } else if (mapLayersOn.track && trackPts.length === 1) {
+        stats.track = 1;
+        const p = trackPts[0];
+        const m = L.circleMarker([p.lat, p.lng], {
+          radius: 8,
+          color: '#e8eefc',
+          fillColor: '#3dd6c6',
+          fillOpacity: 0.95,
+          weight: 2
+        });
+        m.bindPopup('GPS point');
+        mapFeatureLayer.addLayer(m);
+        bounds.push([p.lat, p.lng]);
+      }
+
+      if (mapLayersOn.limits) {
+        const cells = Object.values(state.cells)
+          .filter(c => c.confirmed != null || c.guess != null || c.speeds.length >= 8);
+        stats.limits = cells.length;
+        for (const c of cells) {
+          const center = cellCenter(c.id);
+          const limit = c.confirmed ?? c.guess;
+          const kind = c.confirmed != null ? 'confirmed' : 'guess';
+          const icon = L.divIcon({
+            className: '',
+            html: `<div class="limit-pin ${kind === 'guess' ? 'guess' : ''}">${limit ?? '?'}</div>`,
+            iconSize: [34, 34],
+            iconAnchor: [17, 17]
+          });
+          const m = L.marker([center.lat, center.lng], { icon });
+          m.bindPopup(
+            `<strong>${limit ?? 'Learning'} km/h</strong><br>` +
+            (kind === 'confirmed' ? 'Confirmed limit' : 'Estimated limit') +
+            `<br>${c.visits || 0} visits · ${c.speeds.length} samples`
+          );
+          mapFeatureLayer.addLayer(m);
+          L.circle([center.lat, center.lng], {
+            radius: 55,
+            color: kind === 'confirmed' ? '#2a6b63' : '#7a5a18',
+            fillColor: kind === 'confirmed' ? '#3dd6c6' : '#f0b429',
+            fillOpacity: 0.08,
+            weight: 1
+          }).addTo(mapFeatureLayer);
+          bounds.push([center.lat, center.lng]);
+        }
+      }
+
+      if (mapLayersOn.avg) {
+        stats.avg = state.avgZones.length;
+        for (const z of state.avgZones) {
+          const line = L.polyline(
+            [[z.entrance.lat, z.entrance.lng], [z.exit.lat, z.exit.lng]],
+            { color: '#f0b429', weight: 5, opacity: 0.9, dashArray: '10 8', lineCap: 'round' }
+          );
+          line.bindPopup(
+            `<strong>Avg zone · ${z.limit} km/h</strong><br>` +
+            (z.lengthM ? formatKm(z.lengthM) + ' km corridor<br>' : '') +
+            `${z.runs || 1} run${(z.runs || 1) === 1 ? '' : 's'}` +
+            (z.lastAvgKmh != null ? '<br>Last avg ' + Math.round(z.lastAvgKmh) + ' km/h' : '')
+          );
+          mapFeatureLayer.addLayer(line);
+          const start = L.circleMarker([z.entrance.lat, z.entrance.lng], {
+            radius: 7, color: '#f0b429', fillColor: '#2a2218', fillOpacity: 1, weight: 2
+          });
+          start.bindPopup('Avg zone start');
+          const end = L.circleMarker([z.exit.lat, z.exit.lng], {
+            radius: 7, color: '#ff5d5d', fillColor: '#2a2218', fillOpacity: 1, weight: 2
+          });
+          end.bindPopup('Avg zone end');
+          mapFeatureLayer.addLayer(start);
+          mapFeatureLayer.addLayer(end);
+          bounds.push([z.entrance.lat, z.entrance.lng], [z.exit.lat, z.exit.lng]);
+        }
+      }
+
+      if (mapLayersOn.journeys) {
+        const rows = [...state.journeys];
+        if (state.activeJourney) rows.unshift(state.activeJourney);
+        stats.journeys = rows.filter(j => j.startLat != null || j.endLat != null).length;
+        for (const j of rows) {
+          if (j.startLat != null && j.startLng != null) {
+            const s = L.circleMarker([j.startLat, j.startLng], {
+              radius: 6,
+              color: j.purpose === 'business' ? '#2ecc71' : '#8b9bb8',
+              fillColor: '#12252a',
+              fillOpacity: 1,
+              weight: 2
+            });
+            const route = [j.from, j.to].filter(Boolean).join(' → ') || 'Journey';
+            s.bindPopup(`<strong>${j.purpose}</strong><br>${route}<br>${formatKm(j.meters)} km`);
+            mapFeatureLayer.addLayer(s);
+            bounds.push([j.startLat, j.startLng]);
+          }
+          if (j.endLat != null && j.endLng != null) {
+            const e = L.circleMarker([j.endLat, j.endLng], {
+              radius: 6,
+              color: '#ff5d5d',
+              fillColor: '#2a1518',
+              fillOpacity: 1,
+              weight: 2
+            });
+            e.bindPopup('Journey end');
+            mapFeatureLayer.addLayer(e);
+            bounds.push([j.endLat, j.endLng]);
+          }
+          if (j.startLat != null && j.endLat != null) {
+            const jline = L.polyline(
+              [[j.startLat, j.startLng], [j.endLat, j.endLng]],
+              { color: '#6b7a99', weight: 2, opacity: 0.5, dashArray: '4 6' }
+            );
+            mapFeatureLayer.addLayer(jline);
+          }
+        }
+      }
+
+      $('mapStatTrack').textContent = String(stats.track);
+      $('mapStatLimits').textContent = String(stats.limits);
+      $('mapStatAvg').textContent = String(stats.avg);
+      $('mapStatJourneys').textContent = String(stats.journeys);
+
+      if (!bounds.length) {
+        $('mapHint').textContent = 'Nothing mapped yet — start tracking and drive a route, or teach an average zone.';
+        if (lastPos) mapInstance.setView([lastPos.lat, lastPos.lng], 13);
+        else mapInstance.setView([-36.85, 174.76], 6);
+      } else if (fit) {
+        $('mapHint').textContent = 'Tap markers for details. Colours on the track show speed (teal → amber → red).';
+        mapInstance.fitBounds(bounds, { padding: [36, 36], maxZoom: 15 });
+      }
+
+      setTimeout(() => mapInstance.invalidateSize(), 120);
     }
 
     function renderZones() {
@@ -1804,6 +2178,9 @@
           cell: id
         });
         if (state.recent.length > LOG_CAP) state.recent.length = LOG_CAP;
+        if (moving && typeof accuracy === 'number' && accuracy <= 45) {
+          noteMapTrack(lat, lng, kmh);
+        }
         saveState();
         renderLog();
         maybePrompt(cell);
@@ -1994,6 +2371,19 @@
     });
     $('btnAvgExit').addEventListener('click', () => exitAvgZone());
 
+    $('btnMap').addEventListener('click', () => showScreen('map'));
+    $('btnBackMap').addEventListener('click', () => showScreen('drive'));
+    $('btnMapFit').addEventListener('click', () => renderMap(true));
+
+    $('mapLayerToggles').addEventListener('click', e => {
+      const btn = e.target.closest('[data-layer]');
+      if (!btn) return;
+      const key = btn.dataset.layer;
+      mapLayersOn[key] = !mapLayersOn[key];
+      btn.classList.toggle('on', mapLayersOn[key]);
+      renderMap(true);
+    });
+
     $('btnZones').addEventListener('click', () => {
       renderZones();
       renderAvgZones();
@@ -2153,6 +2543,7 @@
       sampleCount = 0;
       currentCellId = null;
       lastPos = null;
+      state.mapTrack = [];
       renderLog();
       renderZones();
       renderAvgZones();
