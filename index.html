@@ -750,7 +750,7 @@
     </div>
 
     <div class="install-banner" id="installBanner">
-      <p><strong>Install Road Speed</strong><br>Add to your home screen for full-screen GPS tracking.</p>
+      <p><strong id="installBannerTitle">Install Road Speed</strong><br><span id="installBannerText">Open in Chrome first — the Apps hub cannot add a home-screen icon.</span></p>
       <button class="btn primary" type="button" id="btnInstall">Install</button>
     </div>
 
@@ -947,7 +947,7 @@
       <button class="btn danger" id="btnResetJourneys" style="width:100%;margin-top:8px">Clear tax logbook</button>
     </div>
     <div class="panel">
-      <p class="hint">Version 1.3.1 · Data stays on this phone (localStorage). Needs HTTPS + location permission.</p>
+      <p class="hint">Version 1.3.2 · Data stays on this phone (localStorage). Needs HTTPS + location permission.</p>
       <button class="btn primary" id="btnInstallSettings" style="width:100%;margin-top:8px">Install / find app</button>
     </div>
   </div>
@@ -997,10 +997,12 @@
 
   <div class="prompt" id="installHelpPrompt" role="dialog" aria-modal="true" aria-labelledby="installHelpTitle">
     <div class="prompt-card">
-      <h3 id="installHelpTitle">Find Road Speed</h3>
+      <h3 id="installHelpTitle">Install Road Speed</h3>
       <p id="installHelpBody">Install steps for your device.</p>
-      <div class="prompt-actions" style="grid-template-columns:1fr">
-        <button class="btn primary" id="installHelpClose">Got it</button>
+      <button class="btn primary" id="installHelpOpen" style="width:100%;margin-bottom:10px">Open in Chrome</button>
+      <div class="prompt-actions" style="grid-template-columns:1fr 1fr">
+        <button class="btn ghost" id="installHelpCopy">Copy link</button>
+        <button class="btn ghost" id="installHelpClose">Got it</button>
       </div>
     </div>
   </div>
@@ -1009,7 +1011,7 @@
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
   <script>
-    const VERSION = '1.3.1';
+    const VERSION = '1.3.2';
     const STORE_KEY = 'road-speed-v1';
     const CELL_DEG = 0.0009; // ~100 m
     const COMMON_LIMITS = [50, 60, 70, 80, 90, 100];
@@ -2580,19 +2582,39 @@
       }
     });
 
-    const INSTALL_HINT_IOS = 'Safari: Share → Add to Home Screen. The icon will appear on your home screen.';
-    const INSTALL_HINT_ANDROID = 'Chrome ⋮ menu → Install app or Add to Home screen.';
+    const INSTALL_URL = 'https://azzabazza11.github.io/road-speed/?install=1';
     let deferredInstallPrompt = null;
 
     function isStandaloneDisplay() {
       if (window.navigator.standalone === true) return true;
-      if (!window.matchMedia) return false;
-      return !!(
-        window.matchMedia('(display-mode: standalone)').matches ||
-        window.matchMedia('(display-mode: fullscreen)').matches ||
-        window.matchMedia('(display-mode: minimal-ui)').matches
-      );
+      return !!(window.matchMedia && window.matchMedia('(display-mode: standalone)').matches);
     }
+
+    function launchedFromThisPwa() {
+      try {
+        return new URLSearchParams(location.search).get('homescreen') === '1';
+      } catch {
+        return false;
+      }
+    }
+
+    function insideHubWindow() {
+      if (!isStandaloneDisplay()) return false;
+      if (launchedFromThisPwa()) return false;
+      try {
+        const ref = document.referrer ? new URL(document.referrer) : null;
+        if (ref && ref.origin === location.origin && !/^\/road-speed(\/|$)/.test(ref.pathname)) {
+          return true;
+        }
+      } catch {}
+      if (!document.referrer) return true;
+      return false;
+    }
+
+    function isThisAppStandalone() {
+      return isStandaloneDisplay() && launchedFromThisPwa();
+    }
+
     function isAndroidLike() {
       return /Android/i.test(navigator.userAgent || '');
     }
@@ -2604,46 +2626,64 @@
       return !isIosLike() && !isAndroidLike() && /Chrome|Chromium|Edg/i.test(navigator.userAgent || '');
     }
 
-    async function isRegisteredInstall() {
-      if (isStandaloneDisplay()) return true;
-      if (!navigator.getInstalledRelatedApps) return false;
-      try {
-        const apps = await navigator.getInstalledRelatedApps();
-        return apps.length > 0;
-      } catch {
-        return false;
-      }
-    }
-
     function installHelpHtml(mode) {
+      if (mode === 'hub') {
+        return 'You opened this from the <strong>Aaron\'s Apps</strong> hub, so the phone thinks an app is already installed — that icon is the hub, not Road Speed.<br><br>' +
+          '<strong>To get a Road Speed icon:</strong><br>' +
+          '1. Tap <strong>Open in Chrome</strong><br>' +
+          '2. Confirm the address bar shows github.io/road-speed<br>' +
+          '3. Tap <strong>⋮</strong> → <strong>Install app</strong> or <strong>Add to Home screen</strong><br>' +
+          '4. Search the drawer for <strong>Road Speed</strong> (dark speedo icon).';
+      }
       if (mode === 'running') {
-        return 'You\'re already running the <strong>installed</strong> app (full screen, no browser bar).<br><br>' +
-          'To open it again later, look for the <strong>Road Speed</strong> icon on your home screen or in your app drawer / Chrome apps list.';
+        return 'This window is the installed Road Speed app (speedo icon).';
       }
       if (isIosLike()) {
-        return '<strong>Add to Home Screen</strong><br>1. Open this page in <strong>Safari</strong><br>2. Tap <strong>Share</strong> (box with arrow)<br>3. Tap <strong>Add to Home Screen</strong><br>4. Confirm — icon appears on home screen';
+        return '<strong>iPhone / iPad — use Safari</strong><br>1. Copy the link<br>2. Open <strong>Safari</strong> (not Chrome, not the Apps hub)<br>3. Paste the link<br>4. Share → <strong>Add to Home Screen</strong>';
       }
       if (isAndroidLike()) {
-        if (mode === 'registered') {
-          return '<strong>Already installed</strong> but icon missing?<br>1. Open your <strong>app drawer</strong> — search <strong>Road Speed</strong><br>2. Or Chrome → <strong>⋮</strong> → <strong>Installed apps</strong><br>3. To re-add home icon: open this URL in Chrome → <strong>⋮</strong> → <strong>Add to Home screen</strong><br>4. Still stuck? Chrome → Settings → Site settings → find road-speed → Clear & reinstall';
-        }
-        return '<strong>Install on Android</strong><br>1. Open in <strong>Chrome</strong><br>2. Tap <strong>⋮</strong> (top right)<br>3. Tap <strong>Install app</strong> or <strong>Add to Home screen</strong><br>4. Icon appears on home screen / app list';
+        return '<strong>Install on Android Chrome</strong><br>1. This page must be in <strong>Chrome</strong> with the address bar showing<br>2. Tap <strong>⋮</strong> (top right)<br>3. Tap <strong>Install app</strong> or <strong>Add to Home screen</strong><br>4. Icon name: <strong>Road Speed</strong>';
       }
       if (isDesktopChrome()) {
-        return '<strong>Install on desktop Chrome</strong><br>1. Click the <strong>install</strong> icon in the address bar (⊕ or monitor)<br>2. Or Chrome menu → <strong>Install Road Speed</strong><br>3. Find it in <strong>chrome://apps</strong> or your Apps shortcut';
+        return 'Click the install icon in the address bar, or Chrome menu → <strong>Install Road Speed</strong>.';
       }
-      return 'Open in Chrome on your phone, then use the browser menu to <strong>Install app</strong> or <strong>Add to Home screen</strong>.';
+      return 'Open this URL in Chrome, then use the browser menu to <strong>Install app</strong> or <strong>Add to Home screen</strong>.';
     }
 
     function openInstallHelp(mode) {
-      $('installHelpTitle').textContent = mode === 'running'
-        ? 'You\'re in the app'
-        : (mode === 'registered' ? 'Find the installed app' : 'Install Road Speed');
+      const titles = {
+        hub: 'Need Chrome to install',
+        running: 'This is Road Speed',
+        install: 'Install Road Speed'
+      };
+      $('installHelpTitle').textContent = titles[mode] || 'Install Road Speed';
       $('installHelpBody').innerHTML = installHelpHtml(mode);
+      const extra = $('installHelpOpen');
+      if (extra) extra.style.display = (mode === 'running') ? 'none' : '';
       $('installHelpPrompt').classList.add('show');
     }
     function closeInstallHelp() {
       $('installHelpPrompt').classList.remove('show');
+    }
+
+    function openInChrome() {
+      const w = window.open(INSTALL_URL, '_blank', 'noopener,noreferrer');
+      if (!w) {
+        copyInstallLink();
+        showToast('Popup blocked — link copied. Paste it in Chrome.');
+        return;
+      }
+      showToast('Opened in Chrome — then ⋮ → Install app');
+    }
+
+    async function copyInstallLink() {
+      try {
+        if (navigator.clipboard?.writeText) await navigator.clipboard.writeText(INSTALL_URL);
+        else throw new Error('no clipboard');
+        showToast('Copied: ' + INSTALL_URL);
+      } catch {
+        showToast(INSTALL_URL);
+      }
     }
 
     function showToast(msg) {
@@ -2654,41 +2694,45 @@
       showToast._t = setTimeout(() => el.classList.remove('show'), 4500);
     }
     function updateInstallUi() {
-      const standalone = isStandaloneDisplay();
       const banner = $('installBanner');
       const top = $('btnInstallTop');
       const settingsBtn = $('btnInstallSettings');
-      if (standalone) {
+      const title = $('installBannerTitle');
+      const text = $('installBannerText');
+      const main = $('btnInstall');
+      const hub = insideHubWindow();
+      const ours = isThisAppStandalone();
+
+      if (ours && !deferredInstallPrompt) {
         banner.classList.remove('show');
-        if (top) {
-          top.hidden = false;
-          top.textContent = '?';
-          top.title = 'Find app icon';
-        }
-        if (settingsBtn) {
-          settingsBtn.hidden = false;
-          settingsBtn.textContent = 'Where is my icon?';
-        }
+        if (top) { top.hidden = false; top.textContent = '?'; top.title = 'About this app'; }
+        if (settingsBtn) { settingsBtn.hidden = false; settingsBtn.textContent = 'This is the installed app'; }
         return;
       }
+
       banner.classList.add('show');
-      if (top) {
-        top.hidden = false;
-        top.textContent = '↓';
-        top.title = 'Install app';
-      }
-      if (settingsBtn) {
-        settingsBtn.hidden = false;
-        settingsBtn.textContent = deferredInstallPrompt ? 'Install app' : 'Install / find app';
-      }
-      const main = $('btnInstall');
-      if (main) {
-        main.textContent = deferredInstallPrompt ? 'Install' : 'How to install';
+      if (top) { top.hidden = false; top.textContent = '↓'; top.title = 'Install app'; }
+      if (hub) {
+        if (title) title.textContent = 'Not on your home screen yet';
+        if (text) text.textContent = 'You are inside the Apps hub. Open in Chrome, then Install app.';
+        if (main) main.textContent = 'Open in Chrome';
+        if (settingsBtn) { settingsBtn.hidden = false; settingsBtn.textContent = 'Open in Chrome to install'; }
+      } else {
+        if (title) title.textContent = 'Install Road Speed';
+        if (text) text.textContent = deferredInstallPrompt
+          ? 'Tap Install to add the speedo icon to your home screen.'
+          : 'In Chrome tap ⋮ then Install app / Add to Home screen.';
+        if (main) main.textContent = deferredInstallPrompt ? 'Install' : 'How to install';
+        if (settingsBtn) {
+          settingsBtn.hidden = false;
+          settingsBtn.textContent = deferredInstallPrompt ? 'Install app' : 'Install / find app';
+        }
       }
     }
     async function promptInstallApp() {
-      if (isStandaloneDisplay()) {
-        openInstallHelp('running');
+      if (insideHubWindow() && !deferredInstallPrompt) {
+        openInChrome();
+        openInstallHelp('hub');
         return;
       }
       if (deferredInstallPrompt) {
@@ -2696,9 +2740,9 @@
         try {
           const choice = await deferredInstallPrompt.userChoice;
           if (choice && choice.outcome === 'accepted') {
-            showToast('Installing… check home screen or app drawer');
+            showToast('Installing… look for Road Speed (speedo icon)');
           } else {
-            openInstallHelp('install');
+            openInstallHelp(insideHubWindow() ? 'hub' : 'install');
           }
         } catch (_) {
           openInstallHelp('install');
@@ -2707,11 +2751,11 @@
         updateInstallUi();
         return;
       }
-      if (await isRegisteredInstall()) {
-        openInstallHelp('registered');
+      if (isThisAppStandalone()) {
+        openInstallHelp('running');
         return;
       }
-      openInstallHelp('install');
+      openInstallHelp(insideHubWindow() ? 'hub' : 'install');
     }
     window.addEventListener('beforeinstallprompt', e => {
       e.preventDefault();
@@ -2727,17 +2771,27 @@
     $('btnInstallTop').addEventListener('click', promptInstallApp);
     $('btnInstallSettings').addEventListener('click', promptInstallApp);
     $('installHelpClose').addEventListener('click', closeInstallHelp);
+    $('installHelpCopy').addEventListener('click', copyInstallLink);
+    $('installHelpOpen').addEventListener('click', () => {
+      openInChrome();
+    });
     $('installHelpPrompt').addEventListener('click', e => {
       if (e.target === $('installHelpPrompt')) closeInstallHelp();
     });
     updateInstallUi();
 
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('./service-worker.js?v=' + VERSION).catch(() => {});
+      navigator.serviceWorker.register('./service-worker.js?v=' + VERSION, { scope: './' }).catch(() => {});
     }
     try {
       if (new URLSearchParams(location.search).get('install') === '1') {
-        const tryInstall = () => promptInstallApp();
+        const tryInstall = () => {
+          if (insideHubWindow() && !deferredInstallPrompt) {
+            openInstallHelp('hub');
+            return;
+          }
+          promptInstallApp();
+        };
         window.addEventListener('beforeinstallprompt', () => setTimeout(tryInstall, 50), { once: true });
         setTimeout(tryInstall, 700);
       }

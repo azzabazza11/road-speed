@@ -74,8 +74,8 @@ Open **http://localhost:8080/** — geolocation needs a **secure context** (`htt
 
 1. Open the Pages URL in **Chrome**
 2. Allow location
-3. **Install** / Add to Home screen
-4. Icon missing but it says installed? **Settings → Install / find app** for steps
+3. **Install** / Add to Home screen — must be in **Chrome** (address bar visible), not inside the Aaron's Apps hub
+4. Hub “Open app” now opens a new Chrome tab so Android can install a real home-screen icon
 5. Stuck on an old cache? **Reload**
 
-Version: **1.3.1**
+Version: **1.3.2**
