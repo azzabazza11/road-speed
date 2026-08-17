@@ -10,8 +10,9 @@
   <meta name="apple-mobile-web-app-title" content="Road Speed" />
   <meta name="description" content="GPS speedometer with learned speed zones, tax logbook, and a casual overspeed ding." />
   <link rel="manifest" href="./manifest.webmanifest" />
+  <link rel="icon" href="./icon-192.png" type="image/png" />
   <link rel="icon" href="./icon.svg" type="image/svg+xml" />
-  <link rel="apple-touch-icon" href="./icon.svg" />
+  <link rel="apple-touch-icon" href="./icon-192.png" />
   <title>Road Speed</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -526,15 +527,68 @@
       margin-bottom: 12px;
     }
     .stack-btns .btn { width: 100%; }
+
+    .install-banner {
+      display: none;
+      grid-template-columns: 1fr auto;
+      gap: 10px;
+      align-items: center;
+      margin-bottom: 12px;
+      padding: 12px 14px;
+      border-radius: 16px;
+      background: #12252a;
+      border: 1px solid #2a6b63;
+    }
+    .install-banner.show { display: grid; }
+    .install-banner p {
+      margin: 0;
+      font-size: 0.88rem;
+      color: var(--muted);
+      line-height: 1.35;
+    }
+    .install-banner strong { color: var(--ink); }
+    .install-banner .btn {
+      min-height: 44px;
+      padding: 0 14px;
+      white-space: nowrap;
+    }
+    .toast {
+      position: fixed;
+      left: 50%;
+      bottom: calc(18px + var(--safe-b));
+      transform: translateX(-50%) translateY(120%);
+      background: #1a2438;
+      border: 1px solid var(--line);
+      color: var(--ink);
+      padding: 12px 16px;
+      border-radius: 14px;
+      font-size: 0.88rem;
+      z-index: 50;
+      opacity: 0;
+      transition: transform .2s ease, opacity .2s ease;
+      max-width: min(92vw, 360px);
+      text-align: center;
+      pointer-events: none;
+    }
+    .toast.show {
+      transform: translateX(-50%) translateY(0);
+      opacity: 1;
+    }
   </style>
 </head>
 <body>
   <div id="drive" class="screen active">
     <div class="topbar">
       <h1>Road Speed</h1>
+      <button class="icon-btn" id="btnInstallTop" title="Install" aria-label="Install app">↓</button>
       <button class="icon-btn" id="btnLogbook" title="Logbook" aria-label="Logbook">📒</button>
       <button class="icon-btn" id="btnZones" title="Zones" aria-label="Zones">◎</button>
       <button class="icon-btn" id="btnSettings" title="Settings" aria-label="Settings">⚙</button>
+    </div>
+
+    <div class="install-banner" id="installBanner">
+      <p><strong>Install Road Speed</strong><br>Add to your home screen for full-screen GPS tracking.</p>
+      <button class="btn primary" type="button" id="btnInstall">Install</button>
     </div>
 
     <div class="alarm-bar" id="alarmBar">
@@ -670,7 +724,8 @@
       <button class="btn danger" id="btnResetJourneys" style="width:100%;margin-top:8px">Clear tax logbook</button>
     </div>
     <div class="panel">
-      <p class="hint">Version 1.1.1 · Data stays on this phone (localStorage). Needs HTTPS + location permission.</p>
+      <p class="hint">Version 1.1.2 · Data stays on this phone (localStorage). Needs HTTPS + location permission.</p>
+      <button class="btn primary" id="btnInstallSettings" style="width:100%;margin-top:8px">Install app</button>
     </div>
   </div>
 
@@ -717,8 +772,10 @@
     </div>
   </div>
 
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
   <script>
-    const VERSION = '1.1.1';
+    const VERSION = '1.1.2';
     const STORE_KEY = 'road-speed-v1';
     const CELL_DEG = 0.0009; // ~100 m
     const COMMON_LIMITS = [50, 60, 70, 80, 90, 100];
@@ -1760,9 +1817,93 @@
       }
     });
 
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('./service-worker.js').catch(() => {});
+    const INSTALL_HINT_IOS = 'On iPhone: Share → Add to Home Screen.';
+    const INSTALL_HINT_ANDROID = 'Chrome menu (⋮) → Install app / Add to Home screen. Or open from the hub Install link.';
+    let deferredInstallPrompt = null;
+
+    function isStandaloneDisplay() {
+      return !!(window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) ||
+        window.navigator.standalone === true;
     }
+    function isIosLike() {
+      const ua = navigator.userAgent || '';
+      return /iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    }
+    function showToast(msg) {
+      const el = $('toast');
+      el.textContent = msg;
+      el.classList.add('show');
+      clearTimeout(showToast._t);
+      showToast._t = setTimeout(() => el.classList.remove('show'), 3400);
+    }
+    function updateInstallUi() {
+      const standalone = isStandaloneDisplay();
+      const banner = $('installBanner');
+      const top = $('btnInstallTop');
+      const settingsBtn = $('btnInstallSettings');
+      if (standalone) {
+        banner.classList.remove('show');
+        if (top) top.hidden = true;
+        if (settingsBtn) settingsBtn.hidden = true;
+        return;
+      }
+      banner.classList.add('show');
+      if (top) top.hidden = false;
+      if (settingsBtn) {
+        settingsBtn.hidden = false;
+        settingsBtn.textContent = deferredInstallPrompt
+          ? 'Install app'
+          : (isIosLike() ? 'How to add to Home Screen' : 'Install app');
+      }
+      const main = $('btnInstall');
+      if (main) {
+        main.textContent = deferredInstallPrompt
+          ? 'Install'
+          : (isIosLike() ? 'How to install' : 'Install');
+      }
+    }
+    async function promptInstallApp() {
+      if (isStandaloneDisplay()) {
+        showToast('Already installed');
+        return;
+      }
+      if (deferredInstallPrompt) {
+        deferredInstallPrompt.prompt();
+        try {
+          const choice = await deferredInstallPrompt.userChoice;
+          if (choice && choice.outcome === 'accepted') showToast('Installing…');
+        } catch (_) {}
+        deferredInstallPrompt = null;
+        updateInstallUi();
+        return;
+      }
+      showToast(isIosLike() ? INSTALL_HINT_IOS : INSTALL_HINT_ANDROID);
+    }
+    window.addEventListener('beforeinstallprompt', e => {
+      e.preventDefault();
+      deferredInstallPrompt = e;
+      updateInstallUi();
+    });
+    window.addEventListener('appinstalled', () => {
+      deferredInstallPrompt = null;
+      updateInstallUi();
+      showToast('Installed');
+    });
+    $('btnInstall').addEventListener('click', promptInstallApp);
+    $('btnInstallTop').addEventListener('click', promptInstallApp);
+    $('btnInstallSettings').addEventListener('click', promptInstallApp);
+    updateInstallUi();
+
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('./service-worker.js?v=' + VERSION).catch(() => {});
+    }
+    try {
+      if (new URLSearchParams(location.search).get('install') === '1') {
+        const tryInstall = () => promptInstallApp();
+        window.addEventListener('beforeinstallprompt', () => setTimeout(tryInstall, 50), { once: true });
+        setTimeout(tryInstall, 700);
+      }
+    } catch (_) {}
 
     renderSettings();
     renderLog();

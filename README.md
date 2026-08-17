@@ -59,4 +59,4 @@ Open **http://localhost:8080/** — geolocation needs a **secure context** (`htt
 3. **Install** / Add to Home screen
 4. Stuck on an old cache? **Reload**
 
-Version: **1.1.1**
+Version: **1.1.2**
