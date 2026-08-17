@@ -569,6 +569,7 @@
 
     <div class="status">
       <span><span class="dot" id="gpsDot"></span> <span id="gpsStatus">GPS idle</span></span>
+      <span id="autoStatus">Auto off</span>
       <span id="tripStatus">Trip 0.0 km</span>
       <span id="zoneStatus">No zone yet</span>
     </div>
@@ -658,13 +659,18 @@
         <span>Keep screen awake</span>
         <button class="toggle on" id="wakeToggle" type="button" aria-pressed="true"></button>
       </div>
+      <div class="row">
+        <span>Auto track (vehicle GPS)</span>
+        <button class="toggle" id="autoTrackToggle" type="button" aria-pressed="false"></button>
+      </div>
+      <p class="hint">Auto track: sparse GPS checks while you are out of the car; switches to full tracking when vehicle speed returns. Keeps probing after you park.</p>
       <p class="hint">Alarm is a single soft ding while over the confirmed limit. Silence mutes until you drop back under (or tap Silence again).</p>
       <button class="btn ghost" id="btnTestDing" style="width:100%;margin-top:8px">Test ding</button>
       <button class="btn danger" id="btnResetData" style="width:100%;margin-top:8px">Reset speed / zone data</button>
       <button class="btn danger" id="btnResetJourneys" style="width:100%;margin-top:8px">Clear tax logbook</button>
     </div>
     <div class="panel">
-      <p class="hint">Version 1.1.0 · Data stays on this phone (localStorage). Needs HTTPS + location permission.</p>
+      <p class="hint">Version 1.1.1 · Data stays on this phone (localStorage). Needs HTTPS + location permission.</p>
     </div>
   </div>
 
@@ -712,12 +718,16 @@
   </div>
 
   <script>
-    const VERSION = '1.1.0';
+    const VERSION = '1.1.1';
     const STORE_KEY = 'road-speed-v1';
     const CELL_DEG = 0.0009; // ~100 m
     const COMMON_LIMITS = [50, 60, 70, 80, 90, 100];
     const PROMPT_LIMITS = [60, 80, 100];
     const MIN_MOVE_KMH = 12;
+    const VEHICLE_ENTER_KMH = 25;
+    const VEHICLE_EXIT_KMH = 8;
+    const EXIT_HOLD_MS = 120000;
+    const SPARSE_INTERVAL_MS = 45000;
     const MIN_SAMPLES_FOR_GUESS = 18;
     const MIN_VISITS_FOR_PROMPT = 2;
     const LOG_CAP = 80;
@@ -732,7 +742,8 @@
         overDelay: 4,
         dingInterval: 5,
         warnings: true,
-        wakeLock: true
+        wakeLock: true,
+        autoTrack: false
       },
       cells: {},
       recent: [],
@@ -743,7 +754,10 @@
 
     let state = loadState();
     let tracking = false;
+    let sparseMode = false;
     let watchId = null;
+    let sparseTimer = null;
+    let sparseBusy = false;
     let wakeLock = null;
     let lastSampleAt = 0;
     let lastPos = null;
@@ -757,6 +771,9 @@
     let audioCtx = null;
     let promptCellId = null;
     let draftPurpose = 'business';
+    let slowSince = null;
+    let autoStartedTrack = false;
+    let sparseHits = 0;
 
     function loadState() {
       try {
@@ -1111,6 +1128,25 @@
       $('warnToggle').setAttribute('aria-pressed', String(state.settings.warnings));
       $('wakeToggle').classList.toggle('on', state.settings.wakeLock);
       $('wakeToggle').setAttribute('aria-pressed', String(state.settings.wakeLock));
+      $('autoTrackToggle').classList.toggle('on', state.settings.autoTrack);
+      $('autoTrackToggle').setAttribute('aria-pressed', String(state.settings.autoTrack));
+    }
+
+    function renderAutoStatus() {
+      const el = $('autoStatus');
+      if (!state.settings.autoTrack) {
+        el.textContent = 'Auto off';
+        return;
+      }
+      if (tracking) {
+        el.textContent = autoStartedTrack ? 'Auto · driving' : 'Auto · tracking';
+        return;
+      }
+      if (sparseMode) {
+        el.textContent = 'Auto · probing';
+        return;
+      }
+      el.textContent = 'Auto on';
     }
 
     function renderLog() {
@@ -1356,6 +1392,7 @@
 
       renderDriveUI({ kmh, accuracy, lat, lng });
       setGpsStatus(moving ? 'GPS live' : 'GPS ready', moving ? 'live' : 'warn');
+      noteVehicleExit(kmh);
 
       if (now - lastSampleAt < SAMPLE_MIN_MS) return;
       lastSampleAt = now;
@@ -1393,17 +1430,117 @@
       setGpsStatus(err.code === 1 ? 'Location denied' : 'GPS error', 'bad');
     }
 
-    function startTracking() {
+    function noteVehicleExit(kmh) {
+      if (!state.settings.autoTrack || !tracking) {
+        slowSince = null;
+        return;
+      }
+      if (kmh >= VEHICLE_EXIT_KMH) {
+        slowSince = null;
+        return;
+      }
+      if (!slowSince) slowSince = Date.now();
+      if (Date.now() - slowSince < EXIT_HOLD_MS) return;
+      // Parked / left vehicle — drop to sparse probing
+      stopTracking({ resumeSparse: true, quiet: true });
+      setGpsStatus('Parked · sparse GPS', 'warn');
+      renderAutoStatus();
+    }
+
+    function stopSparse() {
+      sparseMode = false;
+      sparseBusy = false;
+      sparseHits = 0;
+      if (sparseTimer) {
+        clearInterval(sparseTimer);
+        sparseTimer = null;
+      }
+      renderAutoStatus();
+    }
+
+    function onSparseFix(pos) {
+      sparseBusy = false;
+      const now = Date.now();
+      const { latitude: lat, longitude: lng, accuracy } = pos.coords;
+      const prev = lastPos;
+      const dt = prev ? now - prev.t : 0;
+      const kmh = kmhFromCoords(pos.coords, prev, dt);
+      lastPos = { lat, lng, t: now, kmh };
+
+      $('speedNum').textContent = Math.round(kmh).toString();
+      if (typeof accuracy === 'number') $('accVal').textContent = Math.round(accuracy);
+      $('latVal').textContent = lat.toFixed(5);
+      $('lngVal').textContent = lng.toFixed(5);
+
+      const vehicleLike = kmh >= VEHICLE_ENTER_KMH ||
+        (kmh >= 18 && typeof accuracy === 'number' && accuracy <= 40);
+
+      if (vehicleLike) {
+        sparseHits += 1;
+        setGpsStatus('Vehicle motion · ' + Math.round(kmh) + ' km/h', 'live');
+      } else {
+        sparseHits = 0;
+        setGpsStatus('Sparse GPS · ' + Math.round(kmh) + ' km/h', 'warn');
+      }
+      renderAutoStatus();
+
+      // One strong hit at highway speed, or two milder vehicle hits
+      if (kmh >= 40 || sparseHits >= 2) {
+        sparseHits = 0;
+        stopSparse();
+        autoStartedTrack = true;
+        startTracking({ fromAuto: true });
+      }
+    }
+
+    function onSparseError(err) {
+      sparseBusy = false;
+      if (err.code === 1) setGpsStatus('Location denied', 'bad');
+      else setGpsStatus('Sparse GPS miss', 'warn');
+      renderAutoStatus();
+    }
+
+    function sparsePoll() {
+      if (!state.settings.autoTrack || tracking || sparseBusy) return;
+      if (!('geolocation' in navigator)) return;
+      sparseBusy = true;
+      setGpsStatus('Sparse GPS check…', 'warn');
+      navigator.geolocation.getCurrentPosition(onSparseFix, onSparseError, {
+        enableHighAccuracy: true,
+        maximumAge: 15000,
+        timeout: 20000
+      });
+    }
+
+    function startSparse() {
+      if (!state.settings.autoTrack || tracking) return;
       if (!('geolocation' in navigator)) {
         setGpsStatus('No geolocation', 'bad');
         return;
       }
+      stopSparse();
+      sparseMode = true;
+      setGpsStatus('Auto · sparse GPS', 'warn');
+      renderAutoStatus();
+      sparsePoll();
+      sparseTimer = setInterval(sparsePoll, SPARSE_INTERVAL_MS);
+    }
+
+    function startTracking(opts = {}) {
+      if (!('geolocation' in navigator)) {
+        setGpsStatus('No geolocation', 'bad');
+        return;
+      }
+      stopSparse();
       ensureAudio();
       tracking = true;
+      slowSince = null;
+      if (!opts.fromAuto) autoStartedTrack = false;
       $('btnTrack').textContent = 'Stop tracking';
       $('btnTrack').classList.remove('primary');
       $('btnTrack').classList.add('danger');
-      setGpsStatus('Acquiring GPS…', 'warn');
+      setGpsStatus(opts.fromAuto ? 'Auto tracking…' : 'Acquiring GPS…', 'warn');
+      renderAutoStatus();
       requestWakeLock();
 
       watchId = navigator.geolocation.watchPosition(onPosition, onGeoError, {
@@ -1413,26 +1550,44 @@
       });
     }
 
-    function stopTracking() {
+    function stopTracking(opts = {}) {
       tracking = false;
+      autoStartedTrack = false;
+      slowSince = null;
       if (watchId != null) {
         navigator.geolocation.clearWatch(watchId);
         watchId = null;
       }
-      releaseWakeLock();
+      if (!opts.resumeSparse) releaseWakeLock();
       $('btnTrack').textContent = 'Start tracking';
       $('btnTrack').classList.add('primary');
       $('btnTrack').classList.remove('danger');
-      setGpsStatus('GPS idle', '');
+      if (!opts.quiet) setGpsStatus('GPS idle', '');
       overSince = null;
       $('alarmBar').classList.remove('show');
       $('speedWrap').classList.remove('over');
+      renderAutoStatus();
+      if (opts.resumeSparse && state.settings.autoTrack) startSparse();
+    }
+
+    function applyAutoTrackSetting() {
+      if (state.settings.autoTrack) {
+        if (!tracking) startSparse();
+        else renderAutoStatus();
+      } else {
+        stopSparse();
+        renderAutoStatus();
+      }
     }
 
     // Events
     $('btnTrack').addEventListener('click', () => {
-      if (tracking) stopTracking();
-      else startTracking();
+      if (tracking) {
+        // Manual stop: if auto on, keep sparse watch for return to vehicle
+        stopTracking({ resumeSparse: state.settings.autoTrack });
+      } else {
+        startTracking();
+      }
     });
 
     $('btnSilence').addEventListener('click', () => {
@@ -1554,6 +1709,13 @@
       if (!state.settings.wakeLock) releaseWakeLock();
     });
 
+    $('autoTrackToggle').addEventListener('click', () => {
+      state.settings.autoTrack = !state.settings.autoTrack;
+      saveState();
+      renderSettings();
+      applyAutoTrackSetting();
+    });
+
     $('btnTestDing').addEventListener('click', () => {
       ensureAudio();
       playDing();
@@ -1593,6 +1755,9 @@
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'visible' && tracking) requestWakeLock();
       if (document.visibilityState === 'hidden' && state.activeJourney) saveState();
+      if (document.visibilityState === 'visible' && state.settings.autoTrack && !tracking && sparseMode) {
+        sparsePoll();
+      }
     });
 
     if ('serviceWorker' in navigator) {
@@ -1604,6 +1769,8 @@
     renderZones();
     renderLogbook();
     renderDriveUI({});
+    renderAutoStatus();
+    applyAutoTrackSetting();
   </script>
 </body>
 </html>

@@ -36,6 +36,14 @@ Open **http://localhost:8080/** — geolocation needs a **secure context** (`htt
 - Settings: over-limit buffer (km/h), delay before alarm, ding interval
 - Soft single ding while over; **Silence** mutes until you drop under again
 
+### Auto track
+
+- Settings toggle: **Auto track (vehicle GPS)**
+- While out of the vehicle: **sparse** GPS checks (~every 45s)
+- When vehicle-like speed returns (≥ ~25 km/h): switches to **full** tracking
+- After ~2 minutes slow/parked: drops back to sparse probing
+- Manual Stop with auto on keeps sparse watch for the next drive
+
 ### Tax logbook
 
 - Start a **Business** or **Private** journey (from / to / notes)
@@ -51,4 +59,4 @@ Open **http://localhost:8080/** — geolocation needs a **secure context** (`htt
 3. **Install** / Add to Home screen
 4. Stuck on an old cache? **Reload**
 
-Version: **1.1.0**
+Version: **1.1.1**
