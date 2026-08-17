@@ -1,4 +1,5 @@
 {
+  "id": "/road-speed/",
   "name": "Road Speed",
   "short_name": "Road Speed",
   "start_url": "./",
@@ -8,6 +9,12 @@
   "background_color": "#0b1220",
   "theme_color": "#0b1220",
   "description": "GPS speedometer with learned speed zones, tax logbook, and a casual overspeed ding.",
+  "related_applications": [
+    {
+      "platform": "webapp",
+      "url": "https://azzabazza11.github.io/road-speed/manifest.webmanifest"
+    }
+  ],
   "icons": [
     {
       "src": "./icon-192.png",
