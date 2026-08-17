@@ -1,4 +1,4 @@
-const CACHE = 'road-speed-v1.3.2';
+const CACHE = 'road-speed-v1.3.3';
 const ASSETS = [
   './',
   './index.html',

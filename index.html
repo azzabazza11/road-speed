@@ -742,7 +742,6 @@
   <div id="drive" class="screen active">
     <div class="topbar">
       <h1>Road Speed</h1>
-      <button class="icon-btn" id="btnInstallTop" title="Install" aria-label="Install app">↓</button>
       <button class="icon-btn" id="btnLogbook" title="Logbook" aria-label="Logbook">📒</button>
       <button class="icon-btn" id="btnMap" title="Map" aria-label="Map">🗺</button>
       <button class="icon-btn" id="btnZones" title="Zones" aria-label="Zones">◎</button>
@@ -947,7 +946,7 @@
       <button class="btn danger" id="btnResetJourneys" style="width:100%;margin-top:8px">Clear tax logbook</button>
     </div>
     <div class="panel">
-      <p class="hint">Version 1.3.2 · Data stays on this phone (localStorage). Needs HTTPS + location permission.</p>
+      <p class="hint">Version 1.3.3 · Data stays on this phone (localStorage). Needs HTTPS + location permission.</p>
       <button class="btn primary" id="btnInstallSettings" style="width:100%;margin-top:8px">Install / find app</button>
     </div>
   </div>
@@ -1011,7 +1010,7 @@
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
   <script>
-    const VERSION = '1.3.2';
+    const VERSION = '1.3.3';
     const STORE_KEY = 'road-speed-v1';
     const CELL_DEG = 0.0009; // ~100 m
     const COMMON_LIMITS = [50, 60, 70, 80, 90, 100];
@@ -2695,7 +2694,6 @@
     }
     function updateInstallUi() {
       const banner = $('installBanner');
-      const top = $('btnInstallTop');
       const settingsBtn = $('btnInstallSettings');
       const title = $('installBannerTitle');
       const text = $('installBannerText');
@@ -2705,13 +2703,11 @@
 
       if (ours && !deferredInstallPrompt) {
         banner.classList.remove('show');
-        if (top) { top.hidden = false; top.textContent = '?'; top.title = 'About this app'; }
-        if (settingsBtn) { settingsBtn.hidden = false; settingsBtn.textContent = 'This is the installed app'; }
+        if (settingsBtn) settingsBtn.hidden = true;
         return;
       }
 
       banner.classList.add('show');
-      if (top) { top.hidden = false; top.textContent = '↓'; top.title = 'Install app'; }
       if (hub) {
         if (title) title.textContent = 'Not on your home screen yet';
         if (text) text.textContent = 'You are inside the Apps hub. Open in Chrome, then Install app.';
@@ -2768,7 +2764,6 @@
       showToast('Installed');
     });
     $('btnInstall').addEventListener('click', promptInstallApp);
-    $('btnInstallTop').addEventListener('click', promptInstallApp);
     $('btnInstallSettings').addEventListener('click', promptInstallApp);
     $('installHelpClose').addEventListener('click', closeInstallHelp);
     $('installHelpCopy').addEventListener('click', copyInstallLink);
