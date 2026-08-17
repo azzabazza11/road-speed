@@ -1,6 +1,6 @@
 # Road Speed
 
-Phone-first **GPS speedometer** with learned speed zones and a casual overspeed ding.
+Phone-first **GPS speedometer** with learned speed zones, a casual overspeed ding, and a **tax mileage logbook**.
 
 Live (after Pages is on): **https://azzabazza11.github.io/road-speed/**
 
@@ -36,6 +36,14 @@ Open **http://localhost:8080/** — geolocation needs a **secure context** (`htt
 - Settings: over-limit buffer (km/h), delay before alarm, ding interval
 - Soft single ding while over; **Silence** mutes until you drop under again
 
+### Tax logbook
+
+- Start a **Business** or **Private** journey (from / to / notes)
+- GPS distance accumulates while tracking
+- Totals + business share on the Logbook screen
+- Export **CSV** for mileage claims
+- Clearing speed/zone data does **not** wipe the logbook
+
 ## Android
 
 1. Open the Pages URL in **Chrome**
@@ -43,4 +51,4 @@ Open **http://localhost:8080/** — geolocation needs a **secure context** (`htt
 3. **Install** / Add to Home screen
 4. Stuck on an old cache? **Reload**
 
-Version: **1.0.0**
+Version: **1.1.0**

@@ -7,7 +7,7 @@
   "orientation": "any",
   "background_color": "#0b1220",
   "theme_color": "#0b1220",
-  "description": "GPS speedometer with learned speed zones and a casual overspeed ding.",
+  "description": "GPS speedometer with learned speed zones, tax logbook, and a casual overspeed ding.",
   "icons": [
     {
       "src": "./icon.svg",

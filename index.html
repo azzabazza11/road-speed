@@ -8,7 +8,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="Road Speed" />
-  <meta name="description" content="GPS speedometer with learned speed zones and a casual overspeed ding." />
+  <meta name="description" content="GPS speedometer with learned speed zones, tax logbook, and a casual overspeed ding." />
   <link rel="manifest" href="./manifest.webmanifest" />
   <link rel="icon" href="./icon.svg" type="image/svg+xml" />
   <link rel="apple-touch-icon" href="./icon.svg" />
@@ -417,12 +417,122 @@
       font-size: 0.88rem;
       padding: 8px 2px;
     }
+
+    .purpose-btns {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+    .purpose-btns button {
+      min-height: 56px;
+      border-radius: 16px;
+      background: #0f1728;
+      border: 1px solid var(--line);
+      font-weight: 700;
+    }
+    .purpose-btns button.active {
+      border-color: var(--accent);
+      color: var(--accent);
+      background: #12252a;
+    }
+    .purpose-btns button.private.active {
+      border-color: #6b7a99;
+      color: #c5d0e6;
+      background: #1a2233;
+    }
+
+    .settings input[type="text"],
+    .settings textarea {
+      min-height: 48px;
+      border-radius: 12px;
+      border: 1px solid var(--line);
+      background: var(--chip);
+      padding: 12px;
+      color: var(--ink);
+      width: 100%;
+      resize: vertical;
+    }
+    .settings textarea { min-height: 72px; }
+
+    .journey-active {
+      display: none;
+      margin-bottom: 12px;
+      padding: 12px 14px;
+      border-radius: 16px;
+      background: #12252a;
+      border: 1px solid #2a6b63;
+      gap: 8px;
+    }
+    .journey-active.show { display: grid; }
+    .journey-active strong { color: var(--accent); }
+    .journey-active .sub { color: var(--muted); font-size: 0.82rem; }
+
+    .trip-card {
+      display: grid;
+      gap: 6px;
+      padding: 12px;
+      border-radius: 14px;
+      background: var(--chip);
+      border: 1px solid var(--line);
+      margin-bottom: 8px;
+      font-size: 0.88rem;
+    }
+    .trip-card .head {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      align-items: center;
+    }
+    .trip-card .tag {
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      padding: 4px 8px;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      color: var(--muted);
+    }
+    .trip-card .tag.business {
+      border-color: #2a6b63;
+      color: var(--ok);
+    }
+    .trip-card .km {
+      font-family: "IBM Plex Mono", ui-monospace, monospace;
+      font-weight: 700;
+      font-size: 1.05rem;
+    }
+    .trip-card .sub { color: var(--muted); font-size: 0.8rem; line-height: 1.35; }
+    .trip-card .actions {
+      display: flex;
+      gap: 8px;
+      margin-top: 4px;
+    }
+    .trip-card .actions button {
+      min-height: 36px;
+      padding: 0 10px;
+      border-radius: 10px;
+      background: #0f1728;
+      border: 1px solid var(--line);
+      color: var(--muted);
+      font-size: 0.78rem;
+      font-weight: 600;
+    }
+
+    .stack-btns {
+      display: grid;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+    .stack-btns .btn { width: 100%; }
   </style>
 </head>
 <body>
   <div id="drive" class="screen active">
     <div class="topbar">
       <h1>Road Speed</h1>
+      <button class="icon-btn" id="btnLogbook" title="Logbook" aria-label="Logbook">📒</button>
       <button class="icon-btn" id="btnZones" title="Zones" aria-label="Zones">◎</button>
       <button class="icon-btn" id="btnSettings" title="Settings" aria-label="Settings">⚙</button>
     </div>
@@ -430,6 +540,11 @@
     <div class="alarm-bar" id="alarmBar">
       <div class="alarm-msg" id="alarmMsg">Over limit</div>
       <button class="btn danger" id="btnSilence">Silence</button>
+    </div>
+
+    <div class="journey-active" id="journeyBanner">
+      <div><strong id="journeyBannerTitle">Business journey</strong></div>
+      <div class="sub" id="journeyBannerSub">0.0 km · started —</div>
     </div>
 
     <div class="speed-wrap" id="speedWrap">
@@ -446,6 +561,10 @@
     <div class="controls">
       <button class="btn primary" id="btnTrack">Start tracking</button>
       <button class="btn ghost" id="btnConfirmNow" disabled>Confirm limit</button>
+    </div>
+    <div class="controls" style="grid-template-columns:1fr 1fr;margin-top:-4px">
+      <button class="btn ghost" id="btnStartJourney">Start journey</button>
+      <button class="btn ghost" id="btnEndJourney" disabled>End journey</button>
     </div>
 
     <div class="status">
@@ -467,6 +586,34 @@
     <div class="panel">
       <h2>Recent log</h2>
       <div class="log" id="recentLog"><div class="empty">Start tracking to record speed + GPS.</div></div>
+    </div>
+  </div>
+
+  <div id="logbook" class="screen">
+    <div class="topbar">
+      <button class="icon-btn" id="btnBackLogbook" aria-label="Back">←</button>
+      <h1>Tax logbook</h1>
+      <button class="icon-btn" id="btnExportCsv" title="Export CSV" aria-label="Export CSV">⇩</button>
+    </div>
+    <div class="panel">
+      <p class="hint">Log business vs private trips for mileage claims. Distance comes from GPS while tracking. Export CSV when you need records for tax.</p>
+    </div>
+    <div class="panel">
+      <h2>Totals</h2>
+      <div class="meta">
+        <div>Business km<b id="bizKmTotal">0.0</b></div>
+        <div>Private km<b id="privKmTotal">0.0</b></div>
+        <div>Journeys<b id="tripCount">0</b></div>
+        <div>Biz share<b id="bizShare">—</b></div>
+      </div>
+    </div>
+    <div class="stack-btns">
+      <button class="btn primary" id="btnLogStart">Start journey</button>
+      <button class="btn danger" id="btnLogEnd" disabled>End journey</button>
+    </div>
+    <div class="panel">
+      <h2>Journeys</h2>
+      <div id="tripList"><div class="empty">No journeys yet.</div></div>
     </div>
   </div>
 
@@ -513,10 +660,38 @@
       </div>
       <p class="hint">Alarm is a single soft ding while over the confirmed limit. Silence mutes until you drop back under (or tap Silence again).</p>
       <button class="btn ghost" id="btnTestDing" style="width:100%;margin-top:8px">Test ding</button>
-      <button class="btn danger" id="btnResetData" style="width:100%;margin-top:8px">Reset all trip data</button>
+      <button class="btn danger" id="btnResetData" style="width:100%;margin-top:8px">Reset speed / zone data</button>
+      <button class="btn danger" id="btnResetJourneys" style="width:100%;margin-top:8px">Clear tax logbook</button>
     </div>
     <div class="panel">
-      <p class="hint">Version 1.0.0 · Data stays on this phone (localStorage). Needs HTTPS + location permission.</p>
+      <p class="hint">Version 1.1.0 · Data stays on this phone (localStorage). Needs HTTPS + location permission.</p>
+    </div>
+  </div>
+
+  <div class="prompt" id="journeyPrompt" role="dialog" aria-modal="true" aria-labelledby="journeyPromptTitle">
+    <div class="prompt-card settings">
+      <h3 id="journeyPromptTitle">Start journey</h3>
+      <p>Choose purpose, then optional notes for your tax log.</p>
+      <div class="purpose-btns">
+        <button type="button" id="purposeBiz" class="active" data-purpose="business">Business</button>
+        <button type="button" id="purposePriv" class="private" data-purpose="private">Private</button>
+      </div>
+      <label>
+        From
+        <input type="text" id="journeyFrom" placeholder="e.g. Home" maxlength="80" />
+      </label>
+      <label>
+        To
+        <input type="text" id="journeyTo" placeholder="e.g. Client site" maxlength="80" />
+      </label>
+      <label>
+        Purpose / notes
+        <textarea id="journeyNote" placeholder="Optional detail for the claim" maxlength="200"></textarea>
+      </label>
+      <div class="prompt-actions">
+        <button class="btn ghost" id="journeyCancel">Cancel</button>
+        <button class="btn primary" id="journeyGo">Start</button>
+      </div>
     </div>
   </div>
 
@@ -537,7 +712,7 @@
   </div>
 
   <script>
-    const VERSION = '1.0.0';
+    const VERSION = '1.1.0';
     const STORE_KEY = 'road-speed-v1';
     const CELL_DEG = 0.0009; // ~100 m
     const COMMON_LIMITS = [50, 60, 70, 80, 90, 100];
@@ -546,6 +721,7 @@
     const MIN_SAMPLES_FOR_GUESS = 18;
     const MIN_VISITS_FOR_PROMPT = 2;
     const LOG_CAP = 80;
+    const JOURNEY_CAP = 400;
     const SAMPLE_MIN_MS = 900;
 
     const $ = id => document.getElementById(id);
@@ -560,7 +736,9 @@
       },
       cells: {},
       recent: [],
-      promptSkipUntil: {}
+      promptSkipUntil: {},
+      journeys: [],
+      activeJourney: null
     });
 
     let state = loadState();
@@ -578,6 +756,7 @@
     let lastDingAt = 0;
     let audioCtx = null;
     let promptCellId = null;
+    let draftPurpose = 'business';
 
     function loadState() {
       try {
@@ -590,7 +769,9 @@
           settings: { ...defaultState().settings, ...(parsed.settings || {}) },
           cells: parsed.cells || {},
           recent: parsed.recent || [],
-          promptSkipUntil: parsed.promptSkipUntil || {}
+          promptSkipUntil: parsed.promptSkipUntil || {},
+          journeys: parsed.journeys || [],
+          activeJourney: parsed.activeJourney || null
         };
       } catch {
         return defaultState();
@@ -602,9 +783,236 @@
     }
 
     function showScreen(name) {
-      ['drive', 'zones', 'settings'].forEach(id => {
+      ['drive', 'logbook', 'zones', 'settings'].forEach(id => {
         $(id).classList.toggle('active', id === name);
       });
+    }
+
+    function uid() {
+      return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+    }
+
+    function formatWhen(ts) {
+      return new Date(ts).toLocaleString([], {
+        day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit'
+      });
+    }
+
+    function formatDuration(ms) {
+      const s = Math.max(0, Math.round(ms / 1000));
+      const h = Math.floor(s / 3600);
+      const m = Math.floor((s % 3600) / 60);
+      if (h) return h + 'h ' + m + 'm';
+      return m + 'm';
+    }
+
+    function csvEscape(v) {
+      const s = String(v ?? '');
+      if (/[",\n]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
+      return s;
+    }
+
+    function updateJourneyButtons() {
+      const on = !!state.activeJourney;
+      $('btnEndJourney').disabled = !on;
+      $('btnLogEnd').disabled = !on;
+      $('btnStartJourney').disabled = on;
+      $('btnLogStart').disabled = on;
+      $('btnStartJourney').textContent = on ? 'Journey running' : 'Start journey';
+      $('btnLogStart').textContent = on ? 'Journey running…' : 'Start journey';
+    }
+
+    function renderJourneyBanner() {
+      const j = state.activeJourney;
+      const banner = $('journeyBanner');
+      if (!j) {
+        banner.classList.remove('show');
+        updateJourneyButtons();
+        return;
+      }
+      banner.classList.add('show');
+      const label = j.purpose === 'business' ? 'Business journey' : 'Private journey';
+      $('journeyBannerTitle').textContent = label + (j.note ? ' · ' + j.note : '');
+      $('journeyBannerSub').textContent =
+        formatKm(j.meters) + ' km · started ' + formatWhen(j.startedAt) +
+        (j.from ? ' · from ' + j.from : '');
+      updateJourneyButtons();
+    }
+
+    function journeyTotals() {
+      let biz = 0;
+      let priv = 0;
+      for (const j of state.journeys) {
+        if (j.purpose === 'business') biz += j.meters || 0;
+        else priv += j.meters || 0;
+      }
+      if (state.activeJourney) {
+        if (state.activeJourney.purpose === 'business') biz += state.activeJourney.meters || 0;
+        else priv += state.activeJourney.meters || 0;
+      }
+      return { biz, priv };
+    }
+
+    function renderLogbook() {
+      const { biz, priv } = journeyTotals();
+      const total = biz + priv;
+      $('bizKmTotal').textContent = formatKm(biz);
+      $('privKmTotal').textContent = formatKm(priv);
+      $('tripCount').textContent = String(state.journeys.length + (state.activeJourney ? 1 : 0));
+      $('bizShare').textContent = total > 0 ? Math.round((biz / total) * 100) + '%' : '—';
+
+      const box = $('tripList');
+      const rows = [];
+      if (state.activeJourney) {
+        const j = state.activeJourney;
+        rows.push({ ...j, active: true });
+      }
+      for (const j of state.journeys) rows.push(j);
+
+      if (!rows.length) {
+        box.innerHTML = '<div class="empty">No journeys yet.</div>';
+        renderJourneyBanner();
+        return;
+      }
+
+      box.innerHTML = rows.map(j => {
+        const tag = j.purpose === 'business' ? 'business' : 'private';
+        const ended = j.active ? 'In progress' : formatWhen(j.endedAt);
+        const route = [j.from, j.to].filter(Boolean).join(' → ') || 'No from/to set';
+        const note = j.note ? escapeHtml(j.note) : '';
+        return `<div class="trip-card" data-jid="${j.id}">
+          <div class="head">
+            <span class="tag ${tag}">${tag}${j.active ? ' · live' : ''}</span>
+            <span class="km">${formatKm(j.meters)} km</span>
+          </div>
+          <div class="sub">${escapeHtml(route)}</div>
+          <div class="sub">${formatWhen(j.startedAt)} → ${ended}${j.endedAt ? ' · ' + formatDuration(j.endedAt - j.startedAt) : ''}</div>
+          ${note ? `<div class="sub">${note}</div>` : ''}
+          ${j.active ? '' : `<div class="actions">
+            <button type="button" data-del="${j.id}">Delete</button>
+          </div>`}
+        </div>`;
+      }).join('');
+      renderJourneyBanner();
+    }
+
+    function escapeHtml(s) {
+      return String(s)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
+    function openJourneyPrompt() {
+      if (state.activeJourney) return;
+      draftPurpose = 'business';
+      $('purposeBiz').classList.add('active');
+      $('purposePriv').classList.remove('active');
+      $('journeyFrom').value = '';
+      $('journeyTo').value = '';
+      $('journeyNote').value = '';
+      $('journeyPrompt').classList.add('show');
+    }
+
+    function closeJourneyPrompt() {
+      $('journeyPrompt').classList.remove('show');
+    }
+
+    function beginJourney() {
+      if (state.activeJourney) return;
+      const from = $('journeyFrom').value.trim();
+      const to = $('journeyTo').value.trim();
+      const note = $('journeyNote').value.trim();
+      state.activeJourney = {
+        id: uid(),
+        purpose: draftPurpose,
+        from,
+        to,
+        note,
+        startedAt: Date.now(),
+        endedAt: null,
+        meters: 0,
+        startLat: lastPos?.lat ?? null,
+        startLng: lastPos?.lng ?? null,
+        endLat: null,
+        endLng: null,
+        maxKmh: 0
+      };
+      saveState();
+      closeJourneyPrompt();
+      renderLogbook();
+      if (!tracking) startTracking();
+    }
+
+    function endJourney() {
+      const j = state.activeJourney;
+      if (!j) return;
+      j.endedAt = Date.now();
+      j.endLat = lastPos?.lat ?? null;
+      j.endLng = lastPos?.lng ?? null;
+      if (!j.to && lastPos) {
+        j.to = j.to || '';
+      }
+      state.journeys.unshift({ ...j, active: undefined });
+      if (state.journeys.length > JOURNEY_CAP) state.journeys.length = JOURNEY_CAP;
+      state.activeJourney = null;
+      saveState();
+      renderLogbook();
+    }
+
+    function addJourneyMeters(m) {
+      if (!state.activeJourney || !(m > 0) || m > 200) return;
+      state.activeJourney.meters += m;
+      // Persist lightly — every ~200 m
+      if (Math.floor(state.activeJourney.meters / 200) !== Math.floor((state.activeJourney.meters - m) / 200)) {
+        saveState();
+        renderJourneyBanner();
+      } else {
+        renderJourneyBanner();
+      }
+    }
+
+    function exportJourneysCsv() {
+      const rows = [...state.journeys];
+      if (state.activeJourney) {
+        rows.unshift({ ...state.activeJourney, endedAt: '', note: (state.activeJourney.note || '') + ' [in progress]' });
+      }
+      if (!rows.length) {
+        alert('No journeys to export yet.');
+        return;
+      }
+      const header = [
+        'id', 'purpose', 'started', 'ended', 'duration_min', 'km',
+        'from', 'to', 'notes', 'start_lat', 'start_lng', 'end_lat', 'end_lng', 'max_kmh'
+      ];
+      const lines = [header.join(',')];
+      for (const j of rows) {
+        const dur = j.endedAt ? Math.round((j.endedAt - j.startedAt) / 60000) : '';
+        lines.push([
+          j.id,
+          j.purpose,
+          new Date(j.startedAt).toISOString(),
+          j.endedAt ? new Date(j.endedAt).toISOString() : '',
+          dur,
+          (j.meters / 1000).toFixed(2),
+          j.from || '',
+          j.to || '',
+          j.note || '',
+          j.startLat ?? '',
+          j.startLng ?? '',
+          j.endLat ?? '',
+          j.endLng ?? '',
+          j.maxKmh != null ? Math.round(j.maxKmh) : ''
+        ].map(csvEscape).join(','));
+      }
+      const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'road-speed-logbook-' + new Date().toISOString().slice(0, 10) + '.csv';
+      a.click();
+      URL.revokeObjectURL(url);
     }
 
     function cellId(lat, lng) {
@@ -934,10 +1342,17 @@
       const kmh = kmhFromCoords(pos.coords, prev, dt);
       const moving = kmh >= MIN_MOVE_KMH;
 
-      if (prev) tripMeters += haversine(prev, { lat, lng });
+      if (prev) {
+        const step = haversine(prev, { lat, lng });
+        tripMeters += step;
+        addJourneyMeters(step);
+      }
       lastPos = { lat, lng, t: now, kmh };
 
       if (kmh > maxSpeed) maxSpeed = kmh;
+      if (state.activeJourney && kmh > (state.activeJourney.maxKmh || 0)) {
+        state.activeJourney.maxKmh = kmh;
+      }
 
       renderDriveUI({ kmh, accuracy, lat, lng });
       setGpsStatus(moving ? 'GPS live' : 'GPS ready', moving ? 'live' : 'warn');
@@ -1029,12 +1444,45 @@
       renderZones();
       showScreen('zones');
     });
+    $('btnLogbook').addEventListener('click', () => {
+      renderLogbook();
+      showScreen('logbook');
+    });
     $('btnSettings').addEventListener('click', () => {
       renderSettings();
       showScreen('settings');
     });
     $('btnBackZones').addEventListener('click', () => showScreen('drive'));
+    $('btnBackLogbook').addEventListener('click', () => showScreen('drive'));
     $('btnBackSettings').addEventListener('click', () => showScreen('drive'));
+
+    $('btnStartJourney').addEventListener('click', openJourneyPrompt);
+    $('btnLogStart').addEventListener('click', openJourneyPrompt);
+    $('btnEndJourney').addEventListener('click', endJourney);
+    $('btnLogEnd').addEventListener('click', endJourney);
+    $('btnExportCsv').addEventListener('click', exportJourneysCsv);
+
+    $('purposeBiz').addEventListener('click', () => {
+      draftPurpose = 'business';
+      $('purposeBiz').classList.add('active');
+      $('purposePriv').classList.remove('active');
+    });
+    $('purposePriv').addEventListener('click', () => {
+      draftPurpose = 'private';
+      $('purposePriv').classList.add('active');
+      $('purposeBiz').classList.remove('active');
+    });
+    $('journeyCancel').addEventListener('click', closeJourneyPrompt);
+    $('journeyGo').addEventListener('click', beginJourney);
+
+    $('tripList').addEventListener('click', e => {
+      const btn = e.target.closest('[data-del]');
+      if (!btn) return;
+      if (!confirm('Delete this journey from the logbook?')) return;
+      state.journeys = state.journeys.filter(j => j.id !== btn.dataset.del);
+      saveState();
+      renderLogbook();
+    });
 
     $('btnConfirmNow').addEventListener('click', () => {
       if (!currentCellId) return;
@@ -1112,8 +1560,14 @@
     });
 
     $('btnResetData').addEventListener('click', () => {
-      if (!confirm('Reset all GPS samples, zones, and logs on this phone?')) return;
+      if (!confirm('Reset GPS samples, zones, and speed logs? Tax logbook journeys stay.')) return;
+      const journeys = state.journeys;
+      const activeJourney = state.activeJourney;
+      const settings = state.settings;
       state = defaultState();
+      state.journeys = journeys;
+      state.activeJourney = activeJourney;
+      state.settings = settings;
       saveState();
       tripMeters = 0;
       maxSpeed = 0;
@@ -1123,12 +1577,22 @@
       renderLog();
       renderZones();
       renderSettings();
+      renderLogbook();
       renderDriveUI({});
       $('speedNum').textContent = '—';
     });
 
+    $('btnResetJourneys').addEventListener('click', () => {
+      if (!confirm('Clear all tax logbook journeys on this phone?')) return;
+      state.journeys = [];
+      state.activeJourney = null;
+      saveState();
+      renderLogbook();
+    });
+
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'visible' && tracking) requestWakeLock();
+      if (document.visibilityState === 'hidden' && state.activeJourney) saveState();
     });
 
     if ('serviceWorker' in navigator) {
@@ -1138,6 +1602,7 @@
     renderSettings();
     renderLog();
     renderZones();
+    renderLogbook();
     renderDriveUI({});
   </script>
 </body>
