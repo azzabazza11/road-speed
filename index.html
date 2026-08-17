@@ -103,6 +103,14 @@
       border-color: #7a3030;
       box-shadow: inset 0 0 0 1px rgba(255, 93, 93, 0.25);
     }
+    .speed-wrap.avg-over {
+      border-color: #7a3030;
+      animation: avgFlash 1s ease-in-out infinite;
+    }
+    @keyframes avgFlash {
+      0%, 100% { box-shadow: inset 0 0 0 2px rgba(255, 93, 93, 0.35); background-color: transparent; }
+      50% { box-shadow: inset 0 0 0 2px rgba(255, 93, 93, 0.85); background-color: rgba(255, 93, 93, 0.08); }
+    }
     .speed-label {
       color: var(--muted);
       font-size: 0.85rem;
@@ -469,6 +477,52 @@
     .journey-active strong { color: var(--accent); }
     .journey-active .sub { color: var(--muted); font-size: 0.82rem; }
 
+    .avg-active {
+      display: none;
+      margin-bottom: 12px;
+      padding: 14px;
+      border-radius: 16px;
+      background: #2a2218;
+      border: 1px solid #7a5a18;
+      gap: 10px;
+    }
+    .avg-active.show { display: grid; }
+    .avg-active.over { border-color: #7a3030; animation: avgFlash 1s ease-in-out infinite; }
+    .avg-active strong { color: var(--warn); }
+    .avg-speeds {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+    .avg-speeds div {
+      background: #1a2438;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 12px;
+      text-align: center;
+      color: var(--muted);
+      font-size: 0.82rem;
+    }
+    .avg-speeds b {
+      display: block;
+      color: var(--ink);
+      font-size: clamp(2rem, 10vw, 2.6rem);
+      margin-top: 4px;
+      line-height: 1;
+    }
+    .avg-speeds b.bad { color: var(--bad); }
+    .avg-active .sub { color: var(--muted); font-size: 0.82rem; }
+
+    .controls.avg-row {
+      grid-template-columns: 1fr 1fr;
+      margin-top: -4px;
+    }
+    .btn.avg-on {
+      border-color: #7a5a18;
+      color: var(--warn);
+      background: #2a2218;
+    }
+
     .trip-card {
       display: grid;
       gap: 6px;
@@ -601,6 +655,15 @@
       <div class="sub" id="journeyBannerSub">0.0 km · started —</div>
     </div>
 
+    <div class="avg-active" id="avgBanner">
+      <div><strong>Average speed zone</strong> · limit <span id="avgLimitShow">80</span> km/h</div>
+      <div class="avg-speeds">
+        <div>Now<b class="mono" id="avgNow">—</b></div>
+        <div>Average<b class="mono" id="avgVal">—</b></div>
+      </div>
+      <div class="sub" id="avgBannerSub">0.0 km in zone · 0m</div>
+    </div>
+
     <div class="speed-wrap" id="speedWrap">
       <div class="speed-label">Current speed</div>
       <p class="speed-num mono" id="speedNum">—</p>
@@ -615,6 +678,10 @@
     <div class="controls">
       <button class="btn primary" id="btnTrack">Start tracking</button>
       <button class="btn ghost" id="btnConfirmNow" disabled>Confirm limit</button>
+    </div>
+    <div class="controls avg-row">
+      <button class="btn" id="btnAvgEnter">Avg speed zone</button>
+      <button class="btn danger" id="btnAvgExit" disabled>Exit zone</button>
     </div>
     <div class="controls" style="grid-template-columns:1fr 1fr;margin-top:-4px">
       <button class="btn ghost" id="btnStartJourney">Start journey</button>
@@ -682,7 +749,12 @@
       <p class="hint">Drive the same legs a few times. The app estimates a limit from your cruise speeds, then asks you to confirm with 60 / 80 / 100.</p>
     </div>
     <div class="panel">
-      <h2>Mapped areas</h2>
+      <h2>Average speed corridors</h2>
+      <p class="hint" style="margin-bottom:10px">Tap enter/exit once to teach a corridor. Next time you approach the start, the app can auto-start averaging.</p>
+      <div class="zones" id="avgZoneList"><div class="empty">No avg zones saved yet.</div></div>
+    </div>
+    <div class="panel">
+      <h2>Limit zones</h2>
       <div class="zones" id="zoneList"><div class="empty">No zones yet — go for a drive.</div></div>
     </div>
   </div>
@@ -705,6 +777,14 @@
         Ding interval (seconds)
         <input type="number" id="dingInterval" min="2" max="15" step="1" />
       </label>
+      <label>
+        Average camera limit (km/h)
+        <input type="number" id="avgLimit" min="40" max="110" step="5" />
+      </label>
+      <div class="row">
+        <span>Auto-detect saved avg zones</span>
+        <button class="toggle on" id="avgAutoToggle" type="button" aria-pressed="true"></button>
+      </div>
       <div class="row">
         <span>Warnings enabled</span>
         <button class="toggle on" id="warnToggle" type="button" aria-pressed="true"></button>
@@ -719,12 +799,13 @@
       </div>
       <p class="hint">Auto track: sparse GPS checks while you are out of the car; switches to full tracking when vehicle speed returns. Keeps probing after you park.</p>
       <p class="hint">Alarm is a single soft ding while over the confirmed limit. Silence mutes until you drop back under (or tap Silence again).</p>
+      <p class="hint">Average zones: tap <strong>Avg speed zone</strong> at the start, <strong>Exit zone</strong> at the end. Your average flashes and dings every 5s if over the avg limit.</p>
       <button class="btn ghost" id="btnTestDing" style="width:100%;margin-top:8px">Test ding</button>
       <button class="btn danger" id="btnResetData" style="width:100%;margin-top:8px">Reset speed / zone data</button>
       <button class="btn danger" id="btnResetJourneys" style="width:100%;margin-top:8px">Clear tax logbook</button>
     </div>
     <div class="panel">
-      <p class="hint">Version 1.1.2 · Data stays on this phone (localStorage). Needs HTTPS + location permission.</p>
+      <p class="hint">Version 1.2.0 · Data stays on this phone (localStorage). Needs HTTPS + location permission.</p>
       <button class="btn primary" id="btnInstallSettings" style="width:100%;margin-top:8px">Install app</button>
     </div>
   </div>
@@ -775,7 +856,7 @@
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
   <script>
-    const VERSION = '1.1.2';
+    const VERSION = '1.2.0';
     const STORE_KEY = 'road-speed-v1';
     const CELL_DEG = 0.0009; // ~100 m
     const COMMON_LIMITS = [50, 60, 70, 80, 90, 100];
@@ -790,6 +871,9 @@
     const LOG_CAP = 80;
     const JOURNEY_CAP = 400;
     const SAMPLE_MIN_MS = 900;
+    const AVG_GATE_RADIUS_M = 180;
+    const AVG_MERGE_RADIUS_M = 280;
+    const AVG_AUTO_COOLDOWN_MS = 90000;
 
     const $ = id => document.getElementById(id);
 
@@ -800,13 +884,17 @@
         dingInterval: 5,
         warnings: true,
         wakeLock: true,
-        autoTrack: false
+        autoTrack: false,
+        avgLimit: 80,
+        avgAutoDetect: true
       },
       cells: {},
       recent: [],
       promptSkipUntil: {},
       journeys: [],
-      activeJourney: null
+      activeJourney: null,
+      avgZones: [],
+      activeAvgSession: null
     });
 
     let state = loadState();
@@ -824,7 +912,10 @@
     let currentCellId = null;
     let overSince = null;
     let silenced = false;
+    let avgOverSince = null;
+    let avgSilenced = false;
     let lastDingAt = 0;
+    let lastAvgAutoAt = 0;
     let audioCtx = null;
     let promptCellId = null;
     let draftPurpose = 'business';
@@ -845,7 +936,9 @@
           recent: parsed.recent || [],
           promptSkipUntil: parsed.promptSkipUntil || {},
           journeys: parsed.journeys || [],
-          activeJourney: parsed.activeJourney || null
+          activeJourney: parsed.activeJourney || null,
+          avgZones: parsed.avgZones || [],
+          activeAvgSession: parsed.activeAvgSession || null
         };
       } catch {
         return defaultState();
@@ -1181,12 +1274,15 @@
       $('overBuffer').value = state.settings.overBuffer;
       $('overDelay').value = state.settings.overDelay;
       $('dingInterval').value = state.settings.dingInterval;
+      $('avgLimit').value = state.settings.avgLimit;
       $('warnToggle').classList.toggle('on', state.settings.warnings);
       $('warnToggle').setAttribute('aria-pressed', String(state.settings.warnings));
       $('wakeToggle').classList.toggle('on', state.settings.wakeLock);
       $('wakeToggle').setAttribute('aria-pressed', String(state.settings.wakeLock));
       $('autoTrackToggle').classList.toggle('on', state.settings.autoTrack);
       $('autoTrackToggle').setAttribute('aria-pressed', String(state.settings.autoTrack));
+      $('avgAutoToggle').classList.toggle('on', state.settings.avgAutoDetect);
+      $('avgAutoToggle').setAttribute('aria-pressed', String(state.settings.avgAutoDetect));
     }
 
     function renderAutoStatus() {
@@ -1245,6 +1341,231 @@
       }).join('');
     }
 
+    function avgSessionKmh(session) {
+      if (!session) return 0;
+      const elapsedMs = Date.now() - session.startedAt;
+      if (elapsedMs < 3000 || session.distanceM < 20) return 0;
+      return (session.distanceM / elapsedMs) * 3600;
+    }
+
+    function distToPoint(lat, lng, pt) {
+      if (!pt || pt.lat == null) return Infinity;
+      return haversine({ lat, lng }, { lat: pt.lat, lng: pt.lng });
+    }
+
+    function findMatchingAvgZone(entrance, exit) {
+      if (!entrance || !exit) return null;
+      let best = null;
+      let bestScore = Infinity;
+      for (const z of state.avgZones) {
+        const dIn = distToPoint(entrance.lat, entrance.lng, z.entrance);
+        const dOut = distToPoint(exit.lat, exit.lng, z.exit);
+        const score = dIn + dOut;
+        if (dIn <= AVG_MERGE_RADIUS_M && dOut <= AVG_MERGE_RADIUS_M && score < bestScore) {
+          best = z;
+          bestScore = score;
+        }
+      }
+      return best;
+    }
+
+    function saveAvgCorridor(session) {
+      const entrance = session.entrance;
+      const exit = session.exit || entrance;
+      const existing = findMatchingAvgZone(entrance, exit);
+      if (existing) {
+        existing.entrance = entrance;
+        existing.exit = exit;
+        existing.limit = session.limit;
+        existing.lengthM = haversine(entrance, exit);
+        existing.runs = (existing.runs || 0) + 1;
+        existing.lastRunAt = Date.now();
+        if (session.finalAvgKmh != null) existing.lastAvgKmh = session.finalAvgKmh;
+        return existing;
+      }
+      const zone = {
+        id: uid(),
+        name: '',
+        limit: session.limit,
+        entrance: { lat: entrance.lat, lng: entrance.lng },
+        exit: { lat: exit.lat, lng: exit.lng },
+        lengthM: haversine(entrance, exit),
+        runs: 1,
+        createdAt: Date.now(),
+        lastRunAt: Date.now(),
+        lastAvgKmh: session.finalAvgKmh ?? null
+      };
+      state.avgZones.unshift(zone);
+      if (state.avgZones.length > 40) state.avgZones.length = 40;
+      return zone;
+    }
+
+    function renderAvgZones() {
+      const box = $('avgZoneList');
+      if (!state.avgZones.length) {
+        box.innerHTML = '<div class="empty">No avg zones saved yet.</div>';
+        return;
+      }
+      box.innerHTML = state.avgZones.map(z => {
+        const len = z.lengthM ? formatKm(z.lengthM) + ' km' : '—';
+        const last = z.lastAvgKmh != null ? Math.round(z.lastAvgKmh) + ' km/h last' : '';
+        return `<div class="zone" data-avg="${z.id}">
+          <div class="badge confirmed">${z.limit}</div>
+          <div>
+            <div>Avg corridor · ${z.runs || 1} run${(z.runs || 1) === 1 ? '' : 's'}</div>
+            <div class="sub">${z.entrance.lat.toFixed(4)}, ${z.entrance.lng.toFixed(4)} → ${z.exit.lat.toFixed(4)}, ${z.exit.lng.toFixed(4)} · ${len}${last ? ' · ' + last : ''}</div>
+          </div>
+          <button type="button" data-del-avg="${z.id}">Del</button>
+        </div>`;
+      }).join('');
+    }
+
+    function updateAvgButtons() {
+      const on = !!state.activeAvgSession;
+      $('btnAvgExit').disabled = !on;
+      $('btnAvgEnter').disabled = on;
+      $('btnAvgEnter').classList.toggle('avg-on', on);
+      $('btnAvgEnter').textContent = on ? 'In avg zone…' : 'Avg speed zone';
+    }
+
+    function renderAvgBanner(kmh) {
+      const s = state.activeAvgSession;
+      const banner = $('avgBanner');
+      if (!s) {
+        banner.classList.remove('show', 'over');
+        updateAvgButtons();
+        return;
+      }
+      banner.classList.add('show');
+      const avg = avgSessionKmh(s);
+      const limit = s.limit;
+      $('avgLimitShow').textContent = limit;
+      $('avgNow').textContent = typeof kmh === 'number' ? Math.round(kmh) : '—';
+      const avgEl = $('avgVal');
+      avgEl.textContent = avg > 0 ? Math.round(avg) : '—';
+      const over = avg > limit;
+      avgEl.classList.toggle('bad', over);
+      banner.classList.toggle('over', over);
+      const elapsed = Math.max(0, Math.round((Date.now() - s.startedAt) / 1000));
+      const mins = Math.floor(elapsed / 60);
+      const secs = elapsed % 60;
+      $('avgBannerSub').textContent =
+        formatKm(s.distanceM) + ' km in zone · ' + (mins ? mins + 'm ' : '') + secs + 's' +
+        (s.zoneId ? ' · saved corridor' : ' · teaching run');
+      updateAvgButtons();
+    }
+
+    function enterAvgZone(opts = {}) {
+      if (state.activeAvgSession) return;
+      if (!lastPos) {
+        showToast('Waiting for GPS fix…');
+        if (!tracking) startTracking();
+        return;
+      }
+      ensureAudio();
+      const limit = opts.limit ?? state.settings.avgLimit;
+      state.activeAvgSession = {
+        startedAt: Date.now(),
+        limit,
+        distanceM: 0,
+        entrance: { lat: lastPos.lat, lng: lastPos.lng },
+        exit: null,
+        zoneId: opts.zoneId || null,
+        auto: !!opts.auto,
+        finalAvgKmh: null
+      };
+      avgOverSince = null;
+      avgSilenced = false;
+      saveState();
+      renderAvgBanner(lastPos.kmh || 0);
+      if (opts.auto) showToast('Avg zone auto-started');
+    }
+
+    function exitAvgZone(opts = {}) {
+      const s = state.activeAvgSession;
+      if (!s) return;
+      if (lastPos) {
+        s.exit = { lat: lastPos.lat, lng: lastPos.lng };
+      } else {
+        s.exit = { ...s.entrance };
+      }
+      s.finalAvgKmh = avgSessionKmh(s);
+      if (!opts.skipSave) saveAvgCorridor(s);
+      const finalAvg = s.finalAvgKmh;
+      state.activeAvgSession = null;
+      avgOverSince = null;
+      avgSilenced = false;
+      saveState();
+      renderAvgBanner(0);
+      renderAvgZones();
+      $('speedWrap').classList.remove('avg-over');
+      $('alarmBar').classList.remove('show');
+      if (finalAvg > 0) {
+        showToast('Zone avg ' + Math.round(finalAvg) + ' km/h · limit ' + (s.limit || state.settings.avgLimit));
+      }
+    }
+
+    function addAvgDistance(m) {
+      const s = state.activeAvgSession;
+      if (!s || !(m > 0) || m > 200) return;
+      s.distanceM += m;
+    }
+
+    function maybeAutoAvgZone(lat, lng, kmh) {
+      if (!state.settings.avgAutoDetect || !state.avgZones.length) return;
+      if (state.activeAvgSession) {
+        const s = state.activeAvgSession;
+        if (s.zoneId) {
+          const z = state.avgZones.find(x => x.id === s.zoneId);
+          if (z && distToPoint(lat, lng, z.exit) <= AVG_GATE_RADIUS_M) {
+            exitAvgZone({ skipSave: false });
+            showToast('Avg zone auto-ended');
+          }
+        }
+        return;
+      }
+      if (kmh < 8) return;
+      if (Date.now() - lastAvgAutoAt < AVG_AUTO_COOLDOWN_MS) return;
+      for (const z of state.avgZones) {
+        if (distToPoint(lat, lng, z.entrance) <= AVG_GATE_RADIUS_M) {
+          lastAvgAutoAt = Date.now();
+          enterAvgZone({ limit: z.limit, zoneId: z.id, auto: true });
+          return;
+        }
+      }
+    }
+
+    function updateAvgOverUI(kmh) {
+      const s = state.activeAvgSession;
+      const wrap = $('speedWrap');
+      const bar = $('alarmBar');
+      if (!s || !state.settings.warnings) {
+        wrap.classList.remove('avg-over');
+        if (!s) avgOverSince = null;
+        return;
+      }
+      const avg = avgSessionKmh(s);
+      const limit = s.limit;
+      const over = avg > limit && avg > 0;
+      wrap.classList.toggle('avg-over', over);
+      renderAvgBanner(kmh);
+
+      if (!over) {
+        avgOverSince = null;
+        avgSilenced = false;
+        if (!overSince) bar.classList.remove('show');
+        return;
+      }
+
+      if (!avgOverSince) avgOverSince = Date.now();
+      bar.classList.add('show');
+      $('alarmMsg').textContent = avgSilenced
+        ? ('Avg over ' + limit + ' · silenced')
+        : ('Avg ' + Math.round(avg) + ' · limit ' + limit + ' · now ' + Math.round(kmh || 0));
+
+      if (!avgSilenced) maybeDing();
+    }
+
     function renderDriveUI(payload) {
       const kmh = payload?.kmh;
       const acc = payload?.accuracy;
@@ -1287,12 +1608,18 @@
       }
 
       $('btnConfirmNow').disabled = !currentCellId;
-      updateOverUI(typeof kmh === 'number' ? kmh : 0, confirmed);
+      if (state.activeAvgSession) {
+        updateAvgOverUI(typeof kmh === 'number' ? kmh : 0);
+      } else {
+        $('speedWrap').classList.remove('avg-over');
+        updateOverUI(typeof kmh === 'number' ? kmh : 0, confirmed);
+      }
     }
 
     function updateOverUI(kmh, confirmed) {
       const wrap = $('speedWrap');
       const bar = $('alarmBar');
+      if (state.activeAvgSession) return;
       if (!state.settings.warnings || confirmed == null) {
         wrap.classList.remove('over');
         bar.classList.remove('show');
@@ -1439,6 +1766,7 @@
         const step = haversine(prev, { lat, lng });
         tripMeters += step;
         addJourneyMeters(step);
+        addAvgDistance(step);
       }
       lastPos = { lat, lng, t: now, kmh };
 
@@ -1450,6 +1778,7 @@
       renderDriveUI({ kmh, accuracy, lat, lng });
       setGpsStatus(moving ? 'GPS live' : 'GPS ready', moving ? 'live' : 'warn');
       noteVehicleExit(kmh);
+      maybeAutoAvgZone(lat, lng, kmh);
 
       if (now - lastSampleAt < SAMPLE_MIN_MS) return;
       lastSampleAt = now;
@@ -1621,8 +1950,10 @@
       $('btnTrack').classList.remove('danger');
       if (!opts.quiet) setGpsStatus('GPS idle', '');
       overSince = null;
-      $('alarmBar').classList.remove('show');
-      $('speedWrap').classList.remove('over');
+      if (!state.activeAvgSession) {
+        $('alarmBar').classList.remove('show');
+        $('speedWrap').classList.remove('over');
+      }
       renderAutoStatus();
       if (opts.resumeSparse && state.settings.autoTrack) startSparse();
     }
@@ -1648,12 +1979,24 @@
     });
 
     $('btnSilence').addEventListener('click', () => {
+      if (state.activeAvgSession) {
+        avgSilenced = !avgSilenced;
+        $('alarmMsg').textContent = avgSilenced ? 'Avg silenced until under limit' : 'Avg alarm active';
+        return;
+      }
       silenced = !silenced;
       $('alarmMsg').textContent = silenced ? 'Silenced until under limit' : 'Alarm active';
     });
 
+    $('btnAvgEnter').addEventListener('click', () => {
+      if (!tracking) startTracking();
+      enterAvgZone();
+    });
+    $('btnAvgExit').addEventListener('click', () => exitAvgZone());
+
     $('btnZones').addEventListener('click', () => {
       renderZones();
+      renderAvgZones();
       showScreen('zones');
     });
     $('btnLogbook').addEventListener('click', () => {
@@ -1727,6 +2070,15 @@
       openPrompt(btn.dataset.edit, state.cells[btn.dataset.edit]?.guess);
     });
 
+    $('avgZoneList').addEventListener('click', e => {
+      const btn = e.target.closest('[data-del-avg]');
+      if (!btn) return;
+      if (!confirm('Delete this average speed corridor?')) return;
+      state.avgZones = state.avgZones.filter(z => z.id !== btn.dataset.delAvg);
+      saveState();
+      renderAvgZones();
+    });
+
     $('btnClearZones').addEventListener('click', () => {
       if (!confirm('Clear estimated (unconfirmed) zones? Confirmed limits stay.')) return;
       Object.values(state.cells).forEach(c => {
@@ -1752,6 +2104,13 @@
     bindNum('overBuffer', 'overBuffer', 0, 20);
     bindNum('overDelay', 'overDelay', 0, 30);
     bindNum('dingInterval', 'dingInterval', 2, 15);
+    bindNum('avgLimit', 'avgLimit', 40, 110);
+
+    $('avgAutoToggle').addEventListener('click', () => {
+      state.settings.avgAutoDetect = !state.settings.avgAutoDetect;
+      saveState();
+      renderSettings();
+    });
 
     $('warnToggle').addEventListener('click', () => {
       state.settings.warnings = !state.settings.warnings;
@@ -1779,7 +2138,7 @@
     });
 
     $('btnResetData').addEventListener('click', () => {
-      if (!confirm('Reset GPS samples, zones, and speed logs? Tax logbook journeys stay.')) return;
+      if (!confirm('Reset GPS samples, zones, avg corridors, and speed logs? Tax logbook journeys stay.')) return;
       const journeys = state.journeys;
       const activeJourney = state.activeJourney;
       const settings = state.settings;
@@ -1787,6 +2146,7 @@
       state.journeys = journeys;
       state.activeJourney = activeJourney;
       state.settings = settings;
+      state.activeAvgSession = null;
       saveState();
       tripMeters = 0;
       maxSpeed = 0;
@@ -1795,8 +2155,10 @@
       lastPos = null;
       renderLog();
       renderZones();
+      renderAvgZones();
       renderSettings();
       renderLogbook();
+      renderAvgBanner(0);
       renderDriveUI({});
       $('speedNum').textContent = '—';
     });
@@ -1908,10 +2270,13 @@
     renderSettings();
     renderLog();
     renderZones();
+    renderAvgZones();
     renderLogbook();
+    renderAvgBanner(0);
     renderDriveUI({});
     renderAutoStatus();
     applyAutoTrackSetting();
+    if (state.activeAvgSession && !tracking) startTracking();
   </script>
 </body>
 </html>

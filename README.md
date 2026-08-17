@@ -30,6 +30,15 @@ Open **http://localhost:8080/** — geolocation needs a **secure context** (`htt
 - When a leg looks steady, it asks you to confirm with **60 / 80 / 100** (or enter another limit)
 - Confirmed zones are stored on the phone (`localStorage`)
 
+### Average speed cameras
+
+- Tap **Avg speed zone** at the corridor entrance, **Exit zone** at the end
+- Shows **now** and **average** km/h for the stretch (distance ÷ time)
+- Default limit **80** km/h — change under Settings → Average camera limit
+- Over average: display **flashes** + soft **ding every 5s** (Silence mutes until under)
+- First run **teaches** entrance/exit; later runs can **auto-start/end** (toggle in Settings)
+- Saved corridors listed under **Zones → Average speed corridors**
+
 ### Overspeed ding
 
 - Uses **confirmed** limits only
@@ -59,4 +68,4 @@ Open **http://localhost:8080/** — geolocation needs a **secure context** (`htt
 3. **Install** / Add to Home screen
 4. Stuck on an old cache? **Reload**
 
-Version: **1.1.2**
+Version: **1.2.0**
