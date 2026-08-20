@@ -1,9 +1,9 @@
 {
   "id": "road-speed",
   "title": "Road Speed",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "category": "Tools",
-  "desc": "GPS speedometer with sticky set limits along a route, mapped zones from earlier trips, tax logbook, and a casual overspeed ding.",
+  "desc": "GPS speedometer that listens for road motion, auto-logs journeys, sticky speed limits, and a casual overspeed ding.",
   "accent": "#3dd6c6",
   "icon": "⏱",
   "iconPath": "icon.svg",
@@ -23,6 +23,11 @@
     "phone"
   ],
   "changelog": [
+    {
+      "version": "1.5.0",
+      "date": "2026-08-21",
+      "notes": "Simplify drive UI: auto listen above 10 km/h, auto start/end journeys; Set limit and avg zone stay manual."
+    },
     {
       "version": "1.4.0",
       "date": "2026-08-21",

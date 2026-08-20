@@ -19,9 +19,17 @@ Open **http://localhost:8080/** — geolocation needs a **secure context** (`htt
 
 ### Speedometer
 
-- Large km/h display from GPS (`coords.speed`, with distance/time fallback)
-- Trip distance, max speed, accuracy, recent lat/lng log
-- Screen wake lock while tracking (optional)
+- Listens for road motion automatically (sparse GPS when parked)
+- Full tracking when speed is above ~**10 km/h**
+- Large km/h display, trip distance, max speed, recent log
+- Screen wake lock while on the road (optional)
+
+### Journeys (tax log)
+
+- Auto-starts when you are on the road; ends after you stay parked ~2 minutes
+- Tap the live banner to switch **Business / Private**
+- Logbook: add notes, end early, export CSV
+- Tiny accidental trips under ~80 m are discarded
 
 ### Speed zones
 
@@ -34,7 +42,7 @@ Open **http://localhost:8080/** — geolocation needs a **secure context** (`htt
 
 ### Average speed cameras
 
-- Tap **Avg speed zone** at the corridor entrance, **Exit zone** at the end
+- Tap **Avg zone** at the corridor entrance, **Exit avg zone** at the end
 - Shows **now** and **average** km/h for the stretch (distance ÷ time)
 - Default limit **80** km/h — change under Settings → Average camera limit
 - Over average: display **flashes** + soft **ding every 5s** (Silence mutes until under)
@@ -52,25 +60,15 @@ Open **http://localhost:8080/** — geolocation needs a **secure context** (`htt
 
 ### Overspeed ding
 
-- Uses **confirmed** limits only
+- Uses the **active** limit (mapped or Set limit)
 - Settings: over-limit buffer (km/h), delay before alarm, ding interval
 - Soft single ding while over; **Silence** mutes until you drop under again
 
-### Auto track
+### Listening / GPS
 
-- Settings toggle: **Auto track (vehicle GPS)**
-- While out of the vehicle: **sparse** GPS checks (~every 45s)
-- When vehicle-like speed returns (≥ ~25 km/h): switches to **full** tracking
-- After ~2 minutes slow/parked: drops back to sparse probing
-- Manual Stop with auto on keeps sparse watch for the next drive
-
-### Tax logbook
-
-- Start a **Business** or **Private** journey (from / to / notes)
-- GPS distance accumulates while tracking
-- Totals + business share on the Logbook screen
-- Export **CSV** for mileage claims
-- Clearing speed/zone data does **not** wipe the logbook
+- **On by default**: sparse GPS while parked, full tracking above ~10 km/h
+- After ~2 minutes parked: ends the journey and returns to listening
+- Settings: pause listening, auto log journeys, default Business/Private
 
 ## Android
 
@@ -80,4 +78,4 @@ Open **http://localhost:8080/** — geolocation needs a **secure context** (`htt
 4. Hub “Open app” now opens a new Chrome tab so Android can install a real home-screen icon
 5. Stuck on an old cache? **Reload**
 
-Version: **1.4.0**
+Version: **1.5.0**

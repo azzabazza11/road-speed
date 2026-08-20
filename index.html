@@ -785,21 +785,16 @@
     </div>
 
     <div class="controls">
-      <button class="btn primary" id="btnTrack">Start tracking</button>
-      <button class="btn ghost" id="btnConfirmNow">Set limit</button>
+      <button class="btn primary" id="btnConfirmNow">Set limit</button>
+      <button class="btn ghost" id="btnAvgEnter">Avg zone</button>
     </div>
-    <div class="controls avg-row">
-      <button class="btn" id="btnAvgEnter">Avg speed zone</button>
-      <button class="btn danger" id="btnAvgExit" disabled>Exit zone</button>
-    </div>
-    <div class="controls" style="grid-template-columns:1fr 1fr;margin-top:-4px">
-      <button class="btn ghost" id="btnStartJourney">Start journey</button>
-      <button class="btn ghost" id="btnEndJourney" disabled>End journey</button>
+    <div class="controls" style="grid-template-columns:1fr;margin-top:-4px">
+      <button class="btn danger" id="btnAvgExit" disabled>Exit avg zone</button>
     </div>
 
     <div class="status">
       <span><span class="dot" id="gpsDot"></span> <span id="gpsStatus">GPS idle</span></span>
-      <span id="autoStatus">Auto off</span>
+      <span id="autoStatus">Listening</span>
       <span id="tripStatus">Trip 0.0 km</span>
       <span id="zoneStatus">No zone yet</span>
     </div>
@@ -827,7 +822,7 @@
       <button class="icon-btn" id="btnExportCsv" title="Export CSV" aria-label="Export CSV">⇩</button>
     </div>
     <div class="panel">
-      <p class="hint">Log business vs private trips for mileage claims. Distance comes from GPS while tracking. Export CSV when you need records for tax.</p>
+      <p class="hint">Trips start when you are on the road (over ~10 km/h) and end after you park. Tap a live journey to switch Business / Private. Export CSV when you need records for tax.</p>
     </div>
     <div class="panel">
       <h2>Totals</h2>
@@ -839,8 +834,8 @@
       </div>
     </div>
     <div class="stack-btns">
-      <button class="btn primary" id="btnLogStart">Start journey</button>
-      <button class="btn danger" id="btnLogEnd" disabled>End journey</button>
+      <button class="btn ghost" id="btnLogDetails">Add / edit journey notes</button>
+      <button class="btn danger" id="btnLogEnd" disabled>End journey now</button>
     </div>
     <div class="panel">
       <h2>Journeys</h2>
@@ -936,27 +931,39 @@
         <button class="toggle on" id="wakeToggle" type="button" aria-pressed="true"></button>
       </div>
       <div class="row">
-        <span>Auto track (vehicle GPS)</span>
-        <button class="toggle" id="autoTrackToggle" type="button" aria-pressed="false"></button>
+        <span>Listen for road motion</span>
+        <button class="toggle on" id="autoTrackToggle" type="button" aria-pressed="true"></button>
       </div>
-      <p class="hint">Auto track: sparse GPS checks while you are out of the car; switches to full tracking when vehicle speed returns. Keeps probing after you park.</p>
+      <div class="row">
+        <span>Auto log journeys</span>
+        <button class="toggle on" id="autoJourneyToggle" type="button" aria-pressed="true"></button>
+      </div>
+      <label>
+        Default journey purpose
+        <select id="defaultPurpose">
+          <option value="private">Private</option>
+          <option value="business">Business</option>
+        </select>
+      </label>
+      <p class="hint">Listening: sparse GPS while parked, full tracking above ~10 km/h. Journeys start on the road and end after you stay slow/parked for a couple of minutes.</p>
       <p class="hint">Alarm is a single soft ding while over the active limit (mapped stretch or your Set limit). Silence mutes until you drop back under (or tap Silence again).</p>
       <p class="hint"><strong>Set limit</strong> sticks along the route. Mapped limits from earlier trips take over when you enter them. Changing mid-trip only overrides until that mapped stretch ends.</p>
-      <p class="hint">Average zones: tap <strong>Avg speed zone</strong> at the start, <strong>Exit zone</strong> at the end. Your average flashes and dings every 5s if over the avg limit.</p>
+      <p class="hint">Average zones: tap <strong>Avg zone</strong> at the start, <strong>Exit avg zone</strong> at the end. Your average flashes and dings every 5s if over the avg limit.</p>
+      <button class="btn ghost" id="btnPauseGps" style="width:100%;margin-top:8px">Pause GPS now</button>
       <button class="btn ghost" id="btnTestDing" style="width:100%;margin-top:8px">Test ding</button>
       <button class="btn danger" id="btnResetData" style="width:100%;margin-top:8px">Reset speed / zone data</button>
       <button class="btn danger" id="btnResetJourneys" style="width:100%;margin-top:8px">Clear tax logbook</button>
     </div>
     <div class="panel">
-      <p class="hint">Version 1.4.0 · Data stays on this phone (localStorage). Needs HTTPS + location permission.</p>
+      <p class="hint">Version 1.5.0 · Data stays on this phone (localStorage). Needs HTTPS + location permission.</p>
       <button class="btn primary" id="btnInstallSettings" style="width:100%;margin-top:8px">Install / find app</button>
     </div>
   </div>
 
   <div class="prompt" id="journeyPrompt" role="dialog" aria-modal="true" aria-labelledby="journeyPromptTitle">
     <div class="prompt-card settings">
-      <h3 id="journeyPromptTitle">Start journey</h3>
-      <p>Choose purpose, then optional notes for your tax log.</p>
+      <h3 id="journeyPromptTitle">Journey details</h3>
+      <p>Optional notes for the tax log. Purpose can also be toggled from the live journey banner.</p>
       <div class="purpose-btns">
         <button type="button" id="purposeBiz" class="active" data-purpose="business">Business</button>
         <button type="button" id="purposePriv" class="private" data-purpose="private">Private</button>
@@ -975,7 +982,7 @@
       </label>
       <div class="prompt-actions">
         <button class="btn ghost" id="journeyCancel">Cancel</button>
-        <button class="btn primary" id="journeyGo">Start</button>
+        <button class="btn primary" id="journeyGo">Save</button>
       </div>
     </div>
   </div>
@@ -1012,13 +1019,14 @@
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
   <script>
-    const VERSION = '1.4.0';
+    const VERSION = '1.5.0';
     const STORE_KEY = 'road-speed-v1';
     const CELL_DEG = 0.0009; // ~100 m
     const COMMON_LIMITS = [50, 60, 70, 80, 90, 100];
     const PROMPT_LIMITS = [60, 80, 100];
-    const MIN_MOVE_KMH = 12;
-    const VEHICLE_ENTER_KMH = 25;
+    const MIN_MOVE_KMH = 10;
+    const ROAD_ON_KMH = 10;
+    const VEHICLE_ENTER_KMH = 10;
     const VEHICLE_EXIT_KMH = 8;
     const EXIT_HOLD_MS = 120000;
     const SPARSE_INTERVAL_MS = 45000;
@@ -1042,7 +1050,9 @@
         dingInterval: 5,
         warnings: true,
         wakeLock: true,
-        autoTrack: false,
+        autoTrack: true,
+        autoJourney: true,
+        defaultPurpose: 'private',
         avgLimit: 80,
         avgAutoDetect: true
       },
@@ -1094,10 +1104,18 @@
         const raw = localStorage.getItem(STORE_KEY);
         if (!raw) return defaultState();
         const parsed = JSON.parse(raw);
+        const settings = { ...defaultState().settings, ...(parsed.settings || {}) };
+        // One-time: simplify UX — listen + auto journeys on by default
+        if (!parsed.settingsMigratedV15) {
+          settings.autoTrack = true;
+          if (settings.autoJourney == null) settings.autoJourney = true;
+          if (!settings.defaultPurpose) settings.defaultPurpose = 'private';
+        }
         return {
           ...defaultState(),
           ...parsed,
-          settings: { ...defaultState().settings, ...(parsed.settings || {}) },
+          settings,
+          settingsMigratedV15: true,
           cells: parsed.cells || {},
           recent: parsed.recent || [],
           mapTrack: parsed.mapTrack || [],
@@ -1153,12 +1171,11 @@
 
     function updateJourneyButtons() {
       const on = !!state.activeJourney;
-      $('btnEndJourney').disabled = !on;
-      $('btnLogEnd').disabled = !on;
-      $('btnStartJourney').disabled = on;
-      $('btnLogStart').disabled = on;
-      $('btnStartJourney').textContent = on ? 'Journey running' : 'Start journey';
-      $('btnLogStart').textContent = on ? 'Journey running…' : 'Start journey';
+      const logEnd = $('btnLogEnd');
+      if (logEnd) {
+        logEnd.disabled = !on;
+        logEnd.textContent = on ? 'End journey now' : 'End journey now';
+      }
     }
 
     function renderJourneyBanner() {
@@ -1171,9 +1188,10 @@
       }
       banner.classList.add('show');
       const label = j.purpose === 'business' ? 'Business journey' : 'Private journey';
-      $('journeyBannerTitle').textContent = label + (j.note ? ' · ' + j.note : '');
+      $('journeyBannerTitle').textContent = label + ' · tap to switch';
       $('journeyBannerSub').textContent =
         formatKm(j.meters) + ' km · started ' + formatWhen(j.startedAt) +
+        (j.note ? ' · ' + j.note : '') +
         (j.from ? ' · from ' + j.from : '');
       updateJourneyButtons();
     }
@@ -1244,13 +1262,14 @@
     }
 
     function openJourneyPrompt() {
-      if (state.activeJourney) return;
-      draftPurpose = 'business';
-      $('purposeBiz').classList.add('active');
-      $('purposePriv').classList.remove('active');
-      $('journeyFrom').value = '';
-      $('journeyTo').value = '';
-      $('journeyNote').value = '';
+      draftPurpose = state.activeJourney?.purpose || state.settings.defaultPurpose || 'private';
+      $('purposeBiz').classList.toggle('active', draftPurpose === 'business');
+      $('purposePriv').classList.toggle('active', draftPurpose === 'private');
+      $('journeyFrom').value = state.activeJourney?.from || '';
+      $('journeyTo').value = state.activeJourney?.to || '';
+      $('journeyNote').value = state.activeJourney?.note || '';
+      $('journeyPromptTitle').textContent = state.activeJourney ? 'Edit journey' : 'Journey details';
+      $('journeyGo').textContent = state.activeJourney ? 'Save' : 'Start now';
       $('journeyPrompt').classList.add('show');
     }
 
@@ -1258,14 +1277,15 @@
       $('journeyPrompt').classList.remove('show');
     }
 
-    function beginJourney() {
+    function beginJourney(opts = {}) {
       if (state.activeJourney) return;
-      const from = $('journeyFrom').value.trim();
-      const to = $('journeyTo').value.trim();
-      const note = $('journeyNote').value.trim();
+      const from = opts.from != null ? opts.from : ($('journeyFrom')?.value || '').trim();
+      const to = opts.to != null ? opts.to : ($('journeyTo')?.value || '').trim();
+      const note = opts.note != null ? opts.note : ($('journeyNote')?.value || '').trim();
+      const purpose = opts.purpose || draftPurpose || state.settings.defaultPurpose || 'private';
       state.activeJourney = {
         id: uid(),
-        purpose: draftPurpose,
+        purpose,
         from,
         to,
         note,
@@ -1276,12 +1296,50 @@
         startLng: lastPos?.lng ?? null,
         endLat: null,
         endLng: null,
-        maxKmh: 0
+        maxKmh: 0,
+        auto: !!opts.auto
       };
+      state.settings.defaultPurpose = purpose;
       saveState();
       closeJourneyPrompt();
       renderLogbook();
       if (!tracking) startTracking();
+    }
+
+    function saveJourneyDetails() {
+      if (state.activeJourney) {
+        state.activeJourney.purpose = draftPurpose;
+        state.activeJourney.from = ($('journeyFrom').value || '').trim();
+        state.activeJourney.to = ($('journeyTo').value || '').trim();
+        state.activeJourney.note = ($('journeyNote').value || '').trim();
+        state.settings.defaultPurpose = draftPurpose;
+        saveState();
+        closeJourneyPrompt();
+        renderLogbook();
+        return;
+      }
+      beginJourney();
+    }
+
+    function toggleJourneyPurpose() {
+      if (!state.activeJourney) return;
+      state.activeJourney.purpose = state.activeJourney.purpose === 'business' ? 'private' : 'business';
+      state.settings.defaultPurpose = state.activeJourney.purpose;
+      saveState();
+      renderLogbook();
+    }
+
+    function maybeAutoBeginJourney(kmh) {
+      if (!state.settings.autoJourney) return;
+      if (state.activeJourney) return;
+      if (!(kmh >= ROAD_ON_KMH)) return;
+      beginJourney({
+        auto: true,
+        purpose: state.settings.defaultPurpose || 'private',
+        from: '',
+        to: '',
+        note: ''
+      });
     }
 
     function endJourney() {
@@ -1292,6 +1350,13 @@
       j.endLng = lastPos?.lng ?? null;
       if (!j.to && lastPos) {
         j.to = j.to || '';
+      }
+      // Drop tiny accidental trips
+      if ((j.meters || 0) < 80 && (j.endedAt - j.startedAt) < 45000) {
+        state.activeJourney = null;
+        saveState();
+        renderLogbook();
+        return;
       }
       state.journeys.unshift({ ...j, active: undefined });
       if (state.journeys.length > JOURNEY_CAP) state.journeys.length = JOURNEY_CAP;
@@ -1442,42 +1507,47 @@
       dot.className = 'dot' + (mode ? ' ' + mode : '');
     }
 
+    function renderAutoStatus() {
+      const el = $('autoStatus');
+      if (!state.settings.autoTrack) {
+        el.textContent = 'GPS paused';
+        return;
+      }
+      if (tracking) {
+        el.textContent = state.activeJourney ? 'On road · logging' : 'On road';
+        return;
+      }
+      if (sparseMode) {
+        el.textContent = 'Listening';
+        return;
+      }
+      el.textContent = 'Listening';
+    }
+
     function renderSettings() {
       $('overBuffer').value = state.settings.overBuffer;
       $('overDelay').value = state.settings.overDelay;
       $('dingInterval').value = state.settings.dingInterval;
       $('avgLimit').value = state.settings.avgLimit;
+      $('defaultPurpose').value = state.settings.defaultPurpose === 'business' ? 'business' : 'private';
       $('warnToggle').classList.toggle('on', state.settings.warnings);
       $('warnToggle').setAttribute('aria-pressed', String(state.settings.warnings));
       $('wakeToggle').classList.toggle('on', state.settings.wakeLock);
       $('wakeToggle').setAttribute('aria-pressed', String(state.settings.wakeLock));
       $('autoTrackToggle').classList.toggle('on', state.settings.autoTrack);
       $('autoTrackToggle').setAttribute('aria-pressed', String(state.settings.autoTrack));
+      $('autoJourneyToggle').classList.toggle('on', state.settings.autoJourney);
+      $('autoJourneyToggle').setAttribute('aria-pressed', String(state.settings.autoJourney));
       $('avgAutoToggle').classList.toggle('on', state.settings.avgAutoDetect);
       $('avgAutoToggle').setAttribute('aria-pressed', String(state.settings.avgAutoDetect));
-    }
-
-    function renderAutoStatus() {
-      const el = $('autoStatus');
-      if (!state.settings.autoTrack) {
-        el.textContent = 'Auto off';
-        return;
-      }
-      if (tracking) {
-        el.textContent = autoStartedTrack ? 'Auto · driving' : 'Auto · tracking';
-        return;
-      }
-      if (sparseMode) {
-        el.textContent = 'Auto · probing';
-        return;
-      }
-      el.textContent = 'Auto on';
+      const pause = $('btnPauseGps');
+      if (pause) pause.textContent = state.settings.autoTrack ? 'Pause GPS now' : 'Resume GPS listening';
     }
 
     function renderLog() {
       const box = $('recentLog');
       if (!state.recent.length) {
-        box.innerHTML = '<div class="empty">Start tracking to record speed + GPS.</div>';
+        box.innerHTML = '<div class="empty">Drive above ~10 km/h — GPS log appears here.</div>';
         return;
       }
       box.innerHTML = state.recent.slice(0, 40).map(r => {
@@ -1818,7 +1888,7 @@
       $('btnAvgExit').disabled = !on;
       $('btnAvgEnter').disabled = on;
       $('btnAvgEnter').classList.toggle('avg-on', on);
-      $('btnAvgEnter').textContent = on ? 'In avg zone…' : 'Avg speed zone';
+      $('btnAvgEnter').textContent = on ? 'In avg zone…' : 'Avg zone';
     }
 
     function renderAvgBanner(kmh) {
@@ -2296,8 +2366,9 @@
       }
 
       renderDriveUI({ kmh, accuracy, lat, lng });
-      setGpsStatus(moving ? 'GPS live' : 'GPS ready', moving ? 'live' : 'warn');
+      setGpsStatus(moving ? 'On road' : 'GPS ready', moving ? 'live' : 'warn');
       noteVehicleExit(kmh);
+      maybeAutoBeginJourney(kmh);
       maybeAutoAvgZone(lat, lng, kmh);
 
       if (now - lastSampleAt < SAMPLE_MIN_MS) return;
@@ -2351,9 +2422,10 @@
       }
       if (!slowSince) slowSince = Date.now();
       if (Date.now() - slowSince < EXIT_HOLD_MS) return;
-      // Parked / left vehicle — drop to sparse probing
+      // Parked / left vehicle — end journey and drop to sparse probing
+      if (state.settings.autoJourney && state.activeJourney) endJourney();
       stopTracking({ resumeSparse: true, quiet: true });
-      setGpsStatus('Parked · sparse GPS', 'warn');
+      setGpsStatus('Parked · listening', 'warn');
       renderAutoStatus();
     }
 
@@ -2446,10 +2518,7 @@
       tracking = true;
       slowSince = null;
       if (!opts.fromAuto) autoStartedTrack = false;
-      $('btnTrack').textContent = 'Stop tracking';
-      $('btnTrack').classList.remove('primary');
-      $('btnTrack').classList.add('danger');
-      setGpsStatus(opts.fromAuto ? 'Auto tracking…' : 'Acquiring GPS…', 'warn');
+      setGpsStatus(opts.fromAuto ? 'On road…' : 'Acquiring GPS…', 'warn');
       renderAutoStatus();
       requestWakeLock();
 
@@ -2469,10 +2538,7 @@
         watchId = null;
       }
       if (!opts.resumeSparse) releaseWakeLock();
-      $('btnTrack').textContent = 'Start tracking';
-      $('btnTrack').classList.add('primary');
-      $('btnTrack').classList.remove('danger');
-      if (!opts.quiet) setGpsStatus('GPS idle', '');
+      if (!opts.quiet) setGpsStatus(state.settings.autoTrack ? 'Listening' : 'GPS paused', '');
       overSince = null;
       if (!state.activeAvgSession) {
         $('alarmBar').classList.remove('show');
@@ -2488,18 +2554,19 @@
         else renderAutoStatus();
       } else {
         stopSparse();
+        if (tracking) stopTracking({ quiet: true });
         renderAutoStatus();
       }
     }
 
     // Events
-    $('btnTrack').addEventListener('click', () => {
-      if (tracking) {
-        // Manual stop: if auto on, keep sparse watch for return to vehicle
-        stopTracking({ resumeSparse: state.settings.autoTrack });
-      } else {
-        startTracking();
-      }
+    $('btnPauseGps').addEventListener('click', () => {
+      state.settings.autoTrack = !state.settings.autoTrack;
+      saveState();
+      renderSettings();
+      applyAutoTrackSetting();
+      showToast(state.settings.autoTrack ? 'Listening for road motion' : 'GPS paused');
+      $('btnPauseGps').textContent = state.settings.autoTrack ? 'Pause GPS now' : 'Resume GPS listening';
     });
 
     $('btnSilence').addEventListener('click', () => {
@@ -2548,11 +2615,10 @@
     $('btnBackLogbook').addEventListener('click', () => showScreen('drive'));
     $('btnBackSettings').addEventListener('click', () => showScreen('drive'));
 
-    $('btnStartJourney').addEventListener('click', openJourneyPrompt);
-    $('btnLogStart').addEventListener('click', openJourneyPrompt);
-    $('btnEndJourney').addEventListener('click', endJourney);
+    $('btnLogDetails').addEventListener('click', openJourneyPrompt);
     $('btnLogEnd').addEventListener('click', endJourney);
     $('btnExportCsv').addEventListener('click', exportJourneysCsv);
+    $('journeyBanner').addEventListener('click', toggleJourneyPurpose);
 
     $('purposeBiz').addEventListener('click', () => {
       draftPurpose = 'business';
@@ -2565,7 +2631,7 @@
       $('purposeBiz').classList.remove('active');
     });
     $('journeyCancel').addEventListener('click', closeJourneyPrompt);
-    $('journeyGo').addEventListener('click', beginJourney);
+    $('journeyGo').addEventListener('click', saveJourneyDetails);
 
     $('tripList').addEventListener('click', e => {
       const btn = e.target.closest('[data-del]');
@@ -2663,6 +2729,17 @@
       saveState();
       renderSettings();
       applyAutoTrackSetting();
+    });
+
+    $('autoJourneyToggle').addEventListener('click', () => {
+      state.settings.autoJourney = !state.settings.autoJourney;
+      saveState();
+      renderSettings();
+    });
+
+    $('defaultPurpose').addEventListener('change', () => {
+      state.settings.defaultPurpose = $('defaultPurpose').value === 'business' ? 'business' : 'private';
+      saveState();
     });
 
     $('btnTestDing').addEventListener('click', () => {
