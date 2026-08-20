@@ -778,6 +778,7 @@
       <div class="speed-unit">km/h</div>
       <div class="limit-row">
         <span class="pill" id="limitPill"><strong id="limitVal">—</strong> limit</span>
+        <span class="pill" id="mappedPill" style="display:none">mapped <strong id="mappedVal">—</strong></span>
         <span class="pill" id="guessPill" style="display:none">guess <strong id="guessVal">—</strong></span>
         <span class="pill" id="accPill">± <strong id="accVal">—</strong> m</span>
       </div>
@@ -785,7 +786,7 @@
 
     <div class="controls">
       <button class="btn primary" id="btnTrack">Start tracking</button>
-      <button class="btn ghost" id="btnConfirmNow" disabled>Confirm limit</button>
+      <button class="btn ghost" id="btnConfirmNow">Set limit</button>
     </div>
     <div class="controls avg-row">
       <button class="btn" id="btnAvgEnter">Avg speed zone</button>
@@ -887,7 +888,7 @@
       <button class="icon-btn" id="btnClearZones" title="Clear guesses" aria-label="Clear guesses">⌫</button>
     </div>
     <div class="panel">
-      <p class="hint">Drive the same legs a few times. The app estimates a limit from your cruise speeds, then asks you to confirm with 60 / 80 / 100.</p>
+      <p class="hint">Tap <strong>Set limit</strong> for 60 / 80 / 100 (or other). That limit sticks along the route. When you re-enter a stretch mapped on earlier trips, the mapped limit takes over. Changing mid-trip only overrides until that mapped stretch ends.</p>
     </div>
     <div class="panel">
       <h2>Average speed corridors</h2>
@@ -939,14 +940,15 @@
         <button class="toggle" id="autoTrackToggle" type="button" aria-pressed="false"></button>
       </div>
       <p class="hint">Auto track: sparse GPS checks while you are out of the car; switches to full tracking when vehicle speed returns. Keeps probing after you park.</p>
-      <p class="hint">Alarm is a single soft ding while over the confirmed limit. Silence mutes until you drop back under (or tap Silence again).</p>
+      <p class="hint">Alarm is a single soft ding while over the active limit (mapped stretch or your Set limit). Silence mutes until you drop back under (or tap Silence again).</p>
+      <p class="hint"><strong>Set limit</strong> sticks along the route. Mapped limits from earlier trips take over when you enter them. Changing mid-trip only overrides until that mapped stretch ends.</p>
       <p class="hint">Average zones: tap <strong>Avg speed zone</strong> at the start, <strong>Exit zone</strong> at the end. Your average flashes and dings every 5s if over the avg limit.</p>
       <button class="btn ghost" id="btnTestDing" style="width:100%;margin-top:8px">Test ding</button>
       <button class="btn danger" id="btnResetData" style="width:100%;margin-top:8px">Reset speed / zone data</button>
       <button class="btn danger" id="btnResetJourneys" style="width:100%;margin-top:8px">Clear tax logbook</button>
     </div>
     <div class="panel">
-      <p class="hint">Version 1.3.3 · Data stays on this phone (localStorage). Needs HTTPS + location permission.</p>
+      <p class="hint">Version 1.4.0 · Data stays on this phone (localStorage). Needs HTTPS + location permission.</p>
       <button class="btn primary" id="btnInstallSettings" style="width:100%;margin-top:8px">Install / find app</button>
     </div>
   </div>
@@ -980,8 +982,8 @@
 
   <div class="prompt" id="limitPrompt" role="dialog" aria-modal="true" aria-labelledby="promptTitle">
     <div class="prompt-card">
-      <h3 id="promptTitle">What is the limit here?</h3>
-      <p id="promptBody">Looks like a steady cruise zone. Tap the posted speed to confirm.</p>
+      <h3 id="promptTitle">Set speed limit</h3>
+      <p id="promptBody">Applies along this stretch until you change it, or until a different mapped limit begins.</p>
       <div class="limit-btns">
         <button type="button" data-limit="60">60</button>
         <button type="button" data-limit="80">80</button>
@@ -1010,7 +1012,7 @@
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
   <script>
-    const VERSION = '1.3.3';
+    const VERSION = '1.4.0';
     const STORE_KEY = 'road-speed-v1';
     const CELL_DEG = 0.0009; // ~100 m
     const COMMON_LIMITS = [50, 60, 70, 80, 90, 100];
@@ -1051,7 +1053,9 @@
       journeys: [],
       activeJourney: null,
       avgZones: [],
-      activeAvgSession: null
+      activeAvgSession: null,
+      stickyLimit: null,
+      limitOverride: null
     });
 
     let state = loadState();
@@ -1075,6 +1079,8 @@
     let lastAvgAutoAt = 0;
     let audioCtx = null;
     let promptCellId = null;
+    let promptMode = 'set'; // set | first
+    let askedFirstLimit = false;
     let draftPurpose = 'business';
     let slowSince = null;
     let autoStartedTrack = false;
@@ -1099,7 +1105,9 @@
           journeys: parsed.journeys || [],
           activeJourney: parsed.activeJourney || null,
           avgZones: parsed.avgZones || [],
-          activeAvgSession: parsed.activeAvgSession || null
+          activeAvgSession: parsed.activeAvgSession || null,
+          stickyLimit: parsed.stickyLimit ?? null,
+          limitOverride: parsed.limitOverride || null
         };
       } catch {
         return defaultState();
@@ -1957,18 +1965,30 @@
       const lat = payload?.lat;
       const lng = payload?.lng;
       const cell = currentCellId ? state.cells[currentCellId] : null;
+      const recorded = recordedLimit(cell);
+      const effective = resolveEffectiveLimit(cell);
+      const guess = cell?.guess ?? null;
+      const mappedShow = state.limitOverride
+        ? state.limitOverride.baseline
+        : recorded;
 
       if (typeof kmh === 'number') {
         $('speedNum').textContent = Math.round(kmh).toString();
       }
 
-      const confirmed = cell?.confirmed ?? null;
-      const guess = cell?.guess ?? null;
-      $('limitVal').textContent = confirmed != null ? confirmed : '—';
+      $('limitVal').textContent = effective != null ? effective : '—';
       const limitPill = $('limitPill');
-      limitPill.className = 'pill' + (confirmed != null ? ' ok' : '');
+      limitPill.className = 'pill' + (effective != null ? ' ok' : '');
 
-      if (guess != null && confirmed == null) {
+      if (mappedShow != null && effective != null && mappedShow !== effective) {
+        $('mappedPill').style.display = '';
+        $('mappedVal').textContent = mappedShow;
+        $('mappedPill').className = 'pill warn';
+      } else {
+        $('mappedPill').style.display = 'none';
+      }
+
+      if (guess != null && recorded == null && effective == null) {
         $('guessPill').style.display = '';
         $('guessVal').textContent = guess;
         $('guessPill').className = 'pill warn';
@@ -1983,21 +2003,26 @@
       $('sampleCount').textContent = String(sampleCount);
       $('tripStatus').textContent = 'Trip ' + formatKm(tripMeters) + ' km';
 
-      if (cell) {
-        const label = cell.confirmed != null
-          ? ('Zone ' + cell.confirmed + ' confirmed')
-          : (cell.guess != null ? ('Zone guess ' + cell.guess) : 'Learning this leg');
-        $('zoneStatus').textContent = label;
+      if (effective != null) {
+        if (state.limitOverride) {
+          $('zoneStatus').textContent = 'Override ' + effective + ' (was ' + state.limitOverride.baseline + ')';
+        } else if (recorded != null) {
+          $('zoneStatus').textContent = 'Mapped ' + recorded + ' km/h';
+        } else {
+          $('zoneStatus').textContent = 'Set ' + effective + ' · painting route';
+        }
+      } else if (cell) {
+        $('zoneStatus').textContent = guess != null ? ('Guess ' + guess + ' · tap Set limit') : 'New road · set limit';
       } else {
         $('zoneStatus').textContent = 'No zone yet';
       }
 
-      $('btnConfirmNow').disabled = !currentCellId;
+      $('btnConfirmNow').disabled = false;
       if (state.activeAvgSession) {
         updateAvgOverUI(typeof kmh === 'number' ? kmh : 0);
       } else {
         $('speedWrap').classList.remove('avg-over');
-        updateOverUI(typeof kmh === 'number' ? kmh : 0, confirmed);
+        updateOverUI(typeof kmh === 'number' ? kmh : 0, effective);
       }
     }
 
@@ -2091,35 +2116,145 @@
       }
     }
 
-    function maybePrompt(cell) {
-      if (!cell || cell.confirmed != null) return;
-      if (!cell.guess) return;
-      if (cell.visits < MIN_VISITS_FOR_PROMPT) return;
-      if (cell.speeds.length < MIN_SAMPLES_FOR_GUESS) return;
-      const skipUntil = state.promptSkipUntil[cell.id] || 0;
-      if (Date.now() < skipUntil) return;
-      if ($('limitPrompt').classList.contains('show')) return;
-      openPrompt(cell.id, cell.guess);
+    function recordedLimit(cell) {
+      if (!cell || cell.confirmed == null) return null;
+      return cell.confirmed;
     }
 
-    function openPrompt(id, guess) {
-      promptCellId = id;
-      $('promptBody').textContent = guess
-        ? ('Cruise looks like about ' + guess + ' km/h here. Tap the posted limit.')
-        : 'Tap the posted limit for this stretch.';
+    function clearLimitOverride(reason) {
+      if (!state.limitOverride) return;
+      state.limitOverride = null;
+      saveState();
+    }
+
+    function resolveEffectiveLimit(cell) {
+      const mapped = recordedLimit(cell);
+      const ov = state.limitOverride;
+
+      if (ov) {
+        const stillSameSection =
+          mapped == null ||
+          mapped === ov.baseline ||
+          mapped === ov.limit;
+        if (!stillSameSection) {
+          clearLimitOverride('mapped-changed');
+          state.stickyLimit = mapped;
+          saveState();
+          return mapped;
+        }
+        return ov.limit;
+      }
+
+      if (mapped != null) {
+        if (state.stickyLimit == null) {
+          state.stickyLimit = mapped;
+          saveState();
+        }
+        return mapped;
+      }
+
+      return state.stickyLimit;
+    }
+
+    function paintCellLimit(cell, limit) {
+      if (!cell || limit == null) return;
+      cell.confirmed = limit;
+      cell.guess = limit;
+    }
+
+    /**
+     * As we drive: stamp unknown cells with sticky/override;
+     * while overriding a baseline stretch, stamp those cells too so the section updates.
+     * Override ends only when we hit a cell whose mapped limit is neither the baseline
+     * nor the override value (a different posted stretch from earlier trips).
+     */
+    function applyLimitAlongRoute(cell) {
+      if (!cell) return resolveEffectiveLimit(cell);
+      const mapped = recordedLimit(cell);
+      const ov = state.limitOverride;
+
+      if (ov) {
+        const stillSameSection =
+          mapped == null ||
+          mapped === ov.baseline ||
+          mapped === ov.limit;
+        if (!stillSameSection) {
+          clearLimitOverride('mapped-changed');
+          state.stickyLimit = mapped;
+          saveState();
+          return mapped;
+        }
+        paintCellLimit(cell, ov.limit);
+        return ov.limit;
+      }
+
+      if (mapped != null) return mapped;
+
+      if (state.stickyLimit != null) {
+        paintCellLimit(cell, state.stickyLimit);
+        return state.stickyLimit;
+      }
+      return null;
+    }
+
+    function maybeAskFirstLimit(cell) {
+      if (askedFirstLimit) return;
+      if (state.stickyLimit != null) return;
+      if (recordedLimit(cell) != null) return;
+      if ($('limitPrompt').classList.contains('show')) return;
+      askedFirstLimit = true;
+      openPrompt(cell?.id || currentCellId, null, 'first');
+    }
+
+    function openPrompt(id, hint, mode) {
+      promptCellId = id || currentCellId || null;
+      promptMode = mode || 'set';
+      const cell = promptCellId ? state.cells[promptCellId] : null;
+      const recorded = recordedLimit(cell);
+      const effective = resolveEffectiveLimit(cell);
+      if (promptMode === 'first') {
+        $('promptTitle').textContent = 'New road — set limit';
+        $('promptBody').textContent = 'Pick the posted limit. It stays on until you change it, and paints this stretch as you drive.';
+      } else if (recorded != null) {
+        $('promptTitle').textContent = 'Change limit';
+        $('promptBody').textContent = 'Mapped here: ' + recorded + ' km/h' +
+          (effective != null && effective !== recorded ? ' · currently using ' + effective : '') +
+          '. New choice applies until the mapped limit changes.';
+      } else {
+        $('promptTitle').textContent = 'Set speed limit';
+        $('promptBody').textContent = (hint
+          ? ('Cruise looks like about ' + hint + ' km/h. ')
+          : '') +
+          'Applies along this stretch and into unknown road until you change it.';
+      }
       $('limitPrompt').classList.add('show');
     }
 
     function closePrompt() {
       $('limitPrompt').classList.remove('show');
       promptCellId = null;
+      promptMode = 'set';
     }
 
     function confirmLimit(limit) {
-      if (!promptCellId) return;
-      const cell = ensureCell(promptCellId);
-      cell.confirmed = limit;
-      cell.guess = limit;
+      const cellIdTarget = promptCellId || currentCellId;
+      const cell = cellIdTarget ? ensureCell(cellIdTarget) : null;
+      const recordedBefore = recordedLimit(cell);
+      const effectiveBefore = resolveEffectiveLimit(cell);
+
+      state.stickyLimit = limit;
+
+      // Override a known mapped stretch only when the user picks a different limit
+      if (recordedBefore != null && recordedBefore !== limit) {
+        state.limitOverride = { limit, baseline: recordedBefore };
+      } else if (effectiveBefore != null && effectiveBefore !== limit && recordedBefore == null && state.limitOverride) {
+        // Changing sticky while already overriding — keep same baseline, new limit
+        state.limitOverride = { limit, baseline: state.limitOverride.baseline };
+      } else {
+        state.limitOverride = null;
+      }
+
+      if (cell) paintCellLimit(cell, limit);
       saveState();
       closePrompt();
       renderZones();
@@ -2173,6 +2308,8 @@
       const cell = ensureCell(id);
       cell.lastSeen = now;
       noteVisit(cell);
+      applyLimitAlongRoute(cell);
+      maybeAskFirstLimit(cell);
 
       if (moving && typeof accuracy === 'number' && accuracy <= 45) {
         cell.speeds.push(Math.round(kmh));
@@ -2194,7 +2331,6 @@
         }
         saveState();
         renderLog();
-        maybePrompt(cell);
       }
 
       renderDriveUI({ kmh, accuracy, lat, lng });
@@ -2441,9 +2577,8 @@
     });
 
     $('btnConfirmNow').addEventListener('click', () => {
-      if (!currentCellId) return;
-      const cell = ensureCell(currentCellId);
-      openPrompt(currentCellId, cell.guess || cell.confirmed);
+      const cell = currentCellId ? ensureCell(currentCellId) : null;
+      openPrompt(currentCellId, cell?.guess || null, 'set');
     });
 
     document.querySelectorAll('#limitPrompt [data-limit]').forEach(btn => {
@@ -2451,15 +2586,11 @@
     });
 
     $('promptSkip').addEventListener('click', () => {
-      if (promptCellId) {
-        state.promptSkipUntil[promptCellId] = Date.now() + 30 * 60 * 1000;
-        saveState();
-      }
       closePrompt();
     });
 
     $('promptOther').addEventListener('click', () => {
-      const raw = prompt('Enter limit km/h (e.g. 50, 70, 90):', '50');
+      const raw = prompt('Enter limit km/h (e.g. 50, 70, 90):', String(state.stickyLimit || 50));
       const n = Number(raw);
       if (!raw || Number.isNaN(n) || n < 10 || n > 130) return;
       confirmLimit(Math.round(n));
@@ -2468,7 +2599,8 @@
     $('zoneList').addEventListener('click', e => {
       const btn = e.target.closest('[data-edit]');
       if (!btn) return;
-      openPrompt(btn.dataset.edit, state.cells[btn.dataset.edit]?.guess);
+      currentCellId = btn.dataset.edit;
+      openPrompt(btn.dataset.edit, state.cells[btn.dataset.edit]?.guess, 'set');
     });
 
     $('avgZoneList').addEventListener('click', e => {

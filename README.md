@@ -26,9 +26,11 @@ Open **http://localhost:8080/** — geolocation needs a **secure context** (`htt
 ### Speed zones
 
 - Samples are grouped into ~100 m cells while you drive
-- After enough cruise samples across visits, the app **guesses** 50–100 km/h
-- When a leg looks steady, it asks you to confirm with **60 / 80 / 100** (or enter another limit)
-- Confirmed zones are stored on the phone (`localStorage`)
+- **Set limit** (60 / 80 / 100 or other) sticks along the route — no need to keep tapping
+- Mapped limits from earlier trips take over when you enter those stretches
+- Mid-trip change only **overrides** until that mapped stretch ends; unknown road keeps your current set limit
+- First time in unknown territory, the app asks once for a limit
+- Zones are stored on the phone (`localStorage`)
 
 ### Average speed cameras
 
@@ -78,4 +80,4 @@ Open **http://localhost:8080/** — geolocation needs a **secure context** (`htt
 4. Hub “Open app” now opens a new Chrome tab so Android can install a real home-screen icon
 5. Stuck on an old cache? **Reload**
 
-Version: **1.3.2**
+Version: **1.4.0**
