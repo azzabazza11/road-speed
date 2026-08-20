@@ -99,6 +99,7 @@
       position: relative;
       overflow: hidden;
       margin-bottom: 14px;
+      cursor: pointer;
     }
     .speed-wrap.over {
       border-color: #7a3030;
@@ -772,7 +773,7 @@
       <div class="sub" id="avgBannerSub">0.0 km in zone · 0m</div>
     </div>
 
-    <div class="speed-wrap" id="speedWrap">
+    <div class="speed-wrap" id="speedWrap" title="Tap to retry GPS">
       <div class="speed-label">Current speed</div>
       <p class="speed-num mono" id="speedNum">—</p>
       <div class="speed-unit">km/h</div>
@@ -811,7 +812,7 @@
 
     <div class="panel">
       <h2>Recent log</h2>
-      <div class="log" id="recentLog"><div class="empty">Start tracking to record speed + GPS.</div></div>
+      <div class="log" id="recentLog"><div class="empty">Drive above ~10 km/h — GPS log appears here.</div></div>
     </div>
   </div>
 
@@ -945,7 +946,7 @@
           <option value="business">Business</option>
         </select>
       </label>
-      <p class="hint">Listening: sparse GPS while parked, full tracking above ~10 km/h. Journeys start on the road and end after you stay slow/parked for a couple of minutes.</p>
+      <p class="hint">Listening starts live GPS so the speedo updates immediately. After you stay parked ~2 minutes it drops to sparse checks, then resumes when you are moving again. Journeys start on the road and end after you park. Tap the speed display to retry GPS.</p>
       <p class="hint">Alarm is a single soft ding while over the active limit (mapped stretch or your Set limit). Silence mutes until you drop back under (or tap Silence again).</p>
       <p class="hint"><strong>Set limit</strong> sticks along the route. Mapped limits from earlier trips take over when you enter them. Changing mid-trip only overrides until that mapped stretch ends.</p>
       <p class="hint">Average zones: tap <strong>Avg zone</strong> at the start, <strong>Exit avg zone</strong> at the end. Your average flashes and dings every 5s if over the avg limit.</p>
@@ -955,7 +956,7 @@
       <button class="btn danger" id="btnResetJourneys" style="width:100%;margin-top:8px">Clear tax logbook</button>
     </div>
     <div class="panel">
-      <p class="hint">Version 1.5.0 · Data stays on this phone (localStorage). Needs HTTPS + location permission.</p>
+      <p class="hint" id="versionHint">Version 1.5.1 · Data stays on this phone (localStorage). Needs HTTPS + location permission.</p>
       <button class="btn primary" id="btnInstallSettings" style="width:100%;margin-top:8px">Install / find app</button>
     </div>
   </div>
@@ -1019,7 +1020,7 @@
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
   <script>
-    const VERSION = '1.5.0';
+    const VERSION = '1.5.1';
     const STORE_KEY = 'road-speed-v1';
     const CELL_DEG = 0.0009; // ~100 m
     const COMMON_LIMITS = [50, 60, 70, 80, 90, 100];
@@ -1029,7 +1030,9 @@
     const VEHICLE_ENTER_KMH = 10;
     const VEHICLE_EXIT_KMH = 8;
     const EXIT_HOLD_MS = 120000;
-    const SPARSE_INTERVAL_MS = 45000;
+    const SPARSE_INTERVAL_MS = 20000;
+    const GPS_JITTER_M = 4;
+    const GPS_TELEPORT_M = 180;
     const MIN_SAMPLES_FOR_GUESS = 18;
     const MIN_VISITS_FOR_PROMPT = 2;
     const LOG_CAP = 80;
@@ -1441,14 +1444,33 @@
       return 2 * R * Math.asin(Math.sqrt(h));
     }
 
+    function fixTimeMs(pos) {
+      const t = pos && pos.timestamp;
+      return (typeof t === 'number' && t > 0) ? t : Date.now();
+    }
+
+    // GPS chips often report coords.speed as 0/null even while moving.
+    // Trust a positive chip speed; otherwise derive km/h from displacement.
     function kmhFromCoords(coords, prev, dtMs) {
-      if (typeof coords.speed === 'number' && coords.speed >= 0 && !Number.isNaN(coords.speed)) {
-        return coords.speed * 3.6;
-      }
-      if (prev && dtMs > 400) {
+      const gps = coords.speed;
+      const gpsKmh = (typeof gps === 'number' && Number.isFinite(gps) && gps >= 0)
+        ? gps * 3.6
+        : null;
+
+      let moveKmh = null;
+      if (prev && dtMs > 400 && dtMs < 30000) {
         const m = haversine(prev, { lat: coords.latitude, lng: coords.longitude });
-        return (m / (dtMs / 1000)) * 3.6;
+        const maxM = Math.max(GPS_JITTER_M, (dtMs / 1000) * 70); // 70 m/s ≈ 252 km/h
+        if (m >= GPS_JITTER_M && m <= maxM) {
+          moveKmh = (m / (dtMs / 1000)) * 3.6;
+        } else if (m < GPS_JITTER_M) {
+          moveKmh = 0;
+        }
       }
+
+      if (gpsKmh != null && gpsKmh >= 2) return gpsKmh;
+      if (moveKmh != null) return moveKmh;
+      if (gpsKmh != null) return gpsKmh;
       return 0;
     }
 
@@ -1514,7 +1536,9 @@
         return;
       }
       if (tracking) {
-        el.textContent = state.activeJourney ? 'On road · logging' : 'On road';
+        const moving = (lastPos?.kmh || 0) >= ROAD_ON_KMH;
+        if (state.activeJourney) el.textContent = 'On road · logging';
+        else el.textContent = moving ? 'On road' : 'GPS live';
         return;
       }
       if (sparseMode) {
@@ -2345,18 +2369,21 @@
     }
 
     function onPosition(pos) {
-      const now = Date.now();
+      const now = fixTimeMs(pos);
       const { latitude: lat, longitude: lng, accuracy } = pos.coords;
       const prev = lastPos;
-      const dt = prev ? now - prev.t : 0;
+      const dt = prev ? Math.max(0, now - prev.t) : 0;
       const kmh = kmhFromCoords(pos.coords, prev, dt);
       const moving = kmh >= MIN_MOVE_KMH;
 
       if (prev) {
         const step = haversine(prev, { lat, lng });
-        tripMeters += step;
-        addJourneyMeters(step);
-        addAvgDistance(step);
+        const maxM = dt > 0 ? (dt / 1000) * 70 : GPS_TELEPORT_M;
+        if (step > 0 && step <= Math.max(GPS_TELEPORT_M, maxM)) {
+          tripMeters += step;
+          addJourneyMeters(step);
+          addAvgDistance(step);
+        }
       }
       lastPos = { lat, lng, t: now, kmh };
 
@@ -2408,7 +2435,9 @@
     }
 
     function onGeoError(err) {
-      setGpsStatus(err.code === 1 ? 'Location denied' : 'GPS error', 'bad');
+      if (err && err.code === 1) setGpsStatus('Location denied', 'bad');
+      else if (err && err.code === 3) setGpsStatus('GPS timeout · tap speedo to retry', 'warn');
+      else setGpsStatus('GPS error · tap speedo to retry', 'bad');
     }
 
     function noteVehicleExit(kmh) {
@@ -2442,17 +2471,14 @@
 
     function onSparseFix(pos) {
       sparseBusy = false;
-      const now = Date.now();
+      const now = fixTimeMs(pos);
       const { latitude: lat, longitude: lng, accuracy } = pos.coords;
       const prev = lastPos;
-      const dt = prev ? now - prev.t : 0;
+      const dt = prev ? Math.max(0, now - prev.t) : 0;
       const kmh = kmhFromCoords(pos.coords, prev, dt);
       lastPos = { lat, lng, t: now, kmh };
 
-      $('speedNum').textContent = Math.round(kmh).toString();
-      if (typeof accuracy === 'number') $('accVal').textContent = Math.round(accuracy);
-      $('latVal').textContent = lat.toFixed(5);
-      $('lngVal').textContent = lng.toFixed(5);
+      renderDriveUI({ kmh, accuracy, lat, lng });
 
       const vehicleLike = kmh >= VEHICLE_ENTER_KMH ||
         (kmh >= 18 && typeof accuracy === 'number' && accuracy <= 40);
@@ -2462,12 +2488,11 @@
         setGpsStatus('Vehicle motion · ' + Math.round(kmh) + ' km/h', 'live');
       } else {
         sparseHits = 0;
-        setGpsStatus('Sparse GPS · ' + Math.round(kmh) + ' km/h', 'warn');
+        setGpsStatus('Listening · ' + Math.round(kmh) + ' km/h', 'warn');
       }
       renderAutoStatus();
 
-      // One strong hit at highway speed, or two milder vehicle hits
-      if (kmh >= 40 || sparseHits >= 2) {
+      if (vehicleLike || kmh >= VEHICLE_ENTER_KMH) {
         sparseHits = 0;
         stopSparse();
         autoStartedTrack = true;
@@ -2489,7 +2514,7 @@
       setGpsStatus('Sparse GPS check…', 'warn');
       navigator.geolocation.getCurrentPosition(onSparseFix, onSparseError, {
         enableHighAccuracy: true,
-        maximumAge: 15000,
+        maximumAge: 0,
         timeout: 20000
       });
     }
@@ -2514,18 +2539,23 @@
         return;
       }
       stopSparse();
+      if (tracking && watchId != null) {
+        requestWakeLock();
+        renderAutoStatus();
+        return;
+      }
       ensureAudio();
       tracking = true;
       slowSince = null;
       if (!opts.fromAuto) autoStartedTrack = false;
-      setGpsStatus(opts.fromAuto ? 'On road…' : 'Acquiring GPS…', 'warn');
+      setGpsStatus('Acquiring GPS…', 'warn');
       renderAutoStatus();
       requestWakeLock();
 
       watchId = navigator.geolocation.watchPosition(onPosition, onGeoError, {
         enableHighAccuracy: true,
-        maximumAge: 1000,
-        timeout: 15000
+        maximumAge: 0,
+        timeout: 27000
       });
     }
 
@@ -2550,7 +2580,9 @@
 
     function applyAutoTrackSetting() {
       if (state.settings.autoTrack) {
-        if (!tracking) startSparse();
+        // Live watch while the app is in use so the speedo actually updates.
+        // After ~2 min parked, noteVehicleExit drops back to sparse probing.
+        if (!tracking) startTracking({ fromAuto: true });
         else renderAutoStatus();
       } else {
         stopSparse();
@@ -2567,6 +2599,22 @@
       applyAutoTrackSetting();
       showToast(state.settings.autoTrack ? 'Listening for road motion' : 'GPS paused');
       $('btnPauseGps').textContent = state.settings.autoTrack ? 'Pause GPS now' : 'Resume GPS listening';
+    });
+
+    $('speedWrap').addEventListener('click', () => {
+      if (!state.settings.autoTrack) {
+        showToast('GPS paused — resume in Settings');
+        return;
+      }
+      const stale = !lastPos || (Date.now() - lastPos.t > 4000);
+      if (tracking && watchId != null && !stale) return;
+      if (watchId != null) {
+        navigator.geolocation.clearWatch(watchId);
+        watchId = null;
+      }
+      tracking = false;
+      startTracking();
+      showToast('Retrying GPS…');
     });
 
     $('btnSilence').addEventListener('click', () => {
@@ -2785,8 +2833,8 @@
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'visible' && tracking) requestWakeLock();
       if (document.visibilityState === 'hidden' && state.activeJourney) saveState();
-      if (document.visibilityState === 'visible' && state.settings.autoTrack && !tracking && sparseMode) {
-        sparsePoll();
+      if (document.visibilityState === 'visible' && state.settings.autoTrack && !tracking) {
+        startTracking({ fromAuto: true });
       }
     });
 
@@ -3002,6 +3050,8 @@
     } catch (_) {}
 
     renderSettings();
+    const versionHint = $('versionHint');
+    if (versionHint) versionHint.textContent = 'Version ' + VERSION + ' · Data stays on this phone (localStorage). Needs HTTPS + location permission.';
     renderLog();
     renderZones();
     renderAvgZones();

@@ -19,10 +19,11 @@ Open **http://localhost:8080/** — geolocation needs a **secure context** (`htt
 
 ### Speedometer
 
-- Listens for road motion automatically (sparse GPS when parked)
+- Listens for road motion automatically (live GPS while the app is open; sparse checks after you park)
 - Full tracking when speed is above ~**10 km/h**
 - Large km/h display, trip distance, max speed, recent log
 - Screen wake lock while on the road (optional)
+- Tap the speed display to retry GPS if the number stalls
 
 ### Journeys (tax log)
 
@@ -66,9 +67,10 @@ Open **http://localhost:8080/** — geolocation needs a **secure context** (`htt
 
 ### Listening / GPS
 
-- **On by default**: sparse GPS while parked, full tracking above ~10 km/h
+- **On by default**: live GPS while the app is open so the speedo updates; after ~2 minutes parked, sparse checks until you move again
 - After ~2 minutes parked: ends the journey and returns to listening
 - Settings: pause listening, auto log journeys, default Business/Private
+- Stuck at 0 / —? Tap the speed display to retry GPS, then **Reload** if the PWA is on an old cache
 
 ## Android
 
@@ -78,4 +80,4 @@ Open **http://localhost:8080/** — geolocation needs a **secure context** (`htt
 4. Hub “Open app” now opens a new Chrome tab so Android can install a real home-screen icon
 5. Stuck on an old cache? **Reload**
 
-Version: **1.5.0**
+Version: **1.5.1**
