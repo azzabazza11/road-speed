@@ -1,7 +1,7 @@
 {
   "id": "road-speed",
   "title": "Road Speed",
-  "version": "1.5.0",
+  "version": "1.5.1",
   "category": "Tools",
   "desc": "GPS speedometer that listens for road motion, auto-logs journeys, sticky speed limits, and a casual overspeed ding.",
   "accent": "#3dd6c6",
@@ -23,6 +23,11 @@
     "phone"
   ],
   "changelog": [
+    {
+      "version": "1.5.1",
+      "date": "2026-08-20",
+      "notes": "Fix speed stuck at 0: live GPS when listening, derive km/h from movement when the chip reports 0."
+    },
     {
       "version": "1.5.0",
       "date": "2026-08-21",
