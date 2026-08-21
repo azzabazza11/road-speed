@@ -35,7 +35,7 @@ Open **http://localhost:8080/** — geolocation needs a **secure context** (`htt
 ### Speed zones
 
 - Samples are grouped into ~100 m cells while you drive
-- **Set limit** (60 / 80 / 100 or other) sticks along the route — no need to keep tapping
+- **Set limit** — big taps for **50 / 60 / 70 / 80 / 100**, or **All speeds** for **10–110** km/h in 10s. The limit sticks along the route — no need to keep tapping
 - Mapped limits from earlier trips take over when you enter those stretches
 - Mid-trip change only **overrides** until that mapped stretch ends; unknown road keeps your current set limit
 - First time in unknown territory, the app asks once for a limit
@@ -80,4 +80,4 @@ Open **http://localhost:8080/** — geolocation needs a **secure context** (`htt
 4. Hub “Open app” now opens a new Chrome tab so Android can install a real home-screen icon
 5. Stuck on an old cache? **Reload**
 
-Version: **1.5.1**
+Version: **1.6.0**

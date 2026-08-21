@@ -357,12 +357,17 @@
     }
     .prompt.show { display: flex; }
     .prompt-card {
-      width: min(420px, 100%);
+      width: min(440px, 100%);
       background: #141d30;
       border: 1px solid var(--line);
       border-radius: 24px;
       padding: 18px;
       box-shadow: 0 -12px 40px rgba(0,0,0,.35);
+    }
+    .prompt-card.limit-sheet {
+      max-height: calc(100dvh - 32px - var(--safe-t) - var(--safe-b));
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
     }
     .prompt-card h3 {
       margin: 0 0 6px;
@@ -376,28 +381,59 @@
     }
     .limit-btns {
       display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 10px;
-      margin-bottom: 10px;
+      gap: 12px;
+      margin-bottom: 12px;
     }
     .limit-btns button {
-      min-height: 72px;
-      border-radius: 18px;
+      min-height: 88px;
+      border-radius: 20px;
       background: #0f1728;
       border: 1px solid var(--line);
       font-family: "IBM Plex Mono", ui-monospace, monospace;
-      font-size: 1.6rem;
+      font-size: 2.15rem;
       font-weight: 700;
+      touch-action: manipulation;
+      user-select: none;
     }
     .limit-btns button:active {
       border-color: var(--accent);
       color: var(--accent);
+      transform: scale(0.98);
+    }
+    .limit-btns button.picked {
+      border-color: var(--accent);
+      color: var(--accent);
+      background: #102830;
+    }
+    .limit-btns-quick {
+      grid-template-columns: 1fr 1fr;
+    }
+    .limit-btns-quick button[data-limit="100"] {
+      grid-column: 1 / -1;
+    }
+    .limit-btns-all {
+      grid-template-columns: repeat(6, 1fr);
+      gap: 10px;
+    }
+    .limit-btns-all button {
+      grid-column: span 2;
+      min-height: 76px;
+      font-size: 1.9rem;
+    }
+    .limit-btns-all button[data-limit="100"],
+    .limit-btns-all button[data-limit="110"] {
+      grid-column: span 3;
+    }
+    @media (max-height: 680px) {
+      .limit-btns-quick button { min-height: 72px; font-size: 1.8rem; }
+      .limit-btns-all button { min-height: 60px; font-size: 1.55rem; }
     }
     .prompt-actions {
       display: grid;
       grid-template-columns: 1fr 1fr;
       gap: 8px;
     }
+    .prompt-actions.single { grid-template-columns: 1fr; }
 
     .alarm-bar {
       display: none;
@@ -884,7 +920,7 @@
       <button class="icon-btn" id="btnClearZones" title="Clear guesses" aria-label="Clear guesses">⌫</button>
     </div>
     <div class="panel">
-      <p class="hint">Tap <strong>Set limit</strong> for 60 / 80 / 100 (or other). That limit sticks along the route. When you re-enter a stretch mapped on earlier trips, the mapped limit takes over. Changing mid-trip only overrides until that mapped stretch ends.</p>
+      <p class="hint">Tap <strong>Set limit</strong> for big 50 / 60 / 70 / 80 / 100 buttons, or <strong>All speeds</strong> for 10–110 km/h. That limit sticks along the route. When you re-enter a stretch mapped on earlier trips, the mapped limit takes over. Changing mid-trip only overrides until that mapped stretch ends.</p>
     </div>
     <div class="panel">
       <h2>Average speed corridors</h2>
@@ -956,7 +992,7 @@
       <button class="btn danger" id="btnResetJourneys" style="width:100%;margin-top:8px">Clear tax logbook</button>
     </div>
     <div class="panel">
-      <p class="hint" id="versionHint">Version 1.5.1 · Data stays on this phone (localStorage). Needs HTTPS + location permission.</p>
+      <p class="hint" id="versionHint">Version 1.6.0 · Data stays on this phone (localStorage). Needs HTTPS + location permission.</p>
       <button class="btn primary" id="btnInstallSettings" style="width:100%;margin-top:8px">Install / find app</button>
     </div>
   </div>
@@ -989,17 +1025,41 @@
   </div>
 
   <div class="prompt" id="limitPrompt" role="dialog" aria-modal="true" aria-labelledby="promptTitle">
-    <div class="prompt-card">
-      <h3 id="promptTitle">Set speed limit</h3>
-      <p id="promptBody">Applies along this stretch until you change it, or until a different mapped limit begins.</p>
-      <div class="limit-btns">
-        <button type="button" data-limit="60">60</button>
-        <button type="button" data-limit="80">80</button>
-        <button type="button" data-limit="100">100</button>
+    <div class="prompt-card limit-sheet">
+      <div id="limitCommonView">
+        <h3 id="promptTitle">Set speed limit</h3>
+        <p id="promptBody">Applies along this stretch until you change it, or until a different mapped limit begins.</p>
+        <div class="limit-btns limit-btns-quick">
+          <button type="button" data-limit="50">50</button>
+          <button type="button" data-limit="60">60</button>
+          <button type="button" data-limit="70">70</button>
+          <button type="button" data-limit="80">80</button>
+          <button type="button" data-limit="100">100</button>
+        </div>
+        <div class="prompt-actions">
+          <button class="btn ghost" id="promptSkip">Not now</button>
+          <button class="btn ghost" id="promptOther">All speeds</button>
+        </div>
       </div>
-      <div class="prompt-actions">
-        <button class="btn ghost" id="promptSkip">Not now</button>
-        <button class="btn ghost" id="promptOther">50 / 70 / 90…</button>
+      <div id="limitAllView" hidden>
+        <h3 id="promptAllTitle">All speed limits</h3>
+        <p>10–110 km/h · one tap each</p>
+        <div class="limit-btns limit-btns-all">
+          <button type="button" data-limit="10">10</button>
+          <button type="button" data-limit="20">20</button>
+          <button type="button" data-limit="30">30</button>
+          <button type="button" data-limit="40">40</button>
+          <button type="button" data-limit="50">50</button>
+          <button type="button" data-limit="60">60</button>
+          <button type="button" data-limit="70">70</button>
+          <button type="button" data-limit="80">80</button>
+          <button type="button" data-limit="90">90</button>
+          <button type="button" data-limit="100">100</button>
+          <button type="button" data-limit="110">110</button>
+        </div>
+        <div class="prompt-actions single">
+          <button class="btn ghost" id="promptBackCommon">Back</button>
+        </div>
       </div>
     </div>
   </div>
@@ -1020,11 +1080,10 @@
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
   <script>
-    const VERSION = '1.5.1';
+    const VERSION = '1.6.0';
     const STORE_KEY = 'road-speed-v1';
     const CELL_DEG = 0.0009; // ~100 m
     const COMMON_LIMITS = [50, 60, 70, 80, 90, 100];
-    const PROMPT_LIMITS = [60, 80, 100];
     const MIN_MOVE_KMH = 10;
     const ROAD_ON_KMH = 10;
     const VEHICLE_ENTER_KMH = 10;
@@ -2300,6 +2359,20 @@
       openPrompt(cell?.id || currentCellId, null, 'first');
     }
 
+    function showLimitView(which) {
+      const isAll = which === 'all';
+      $('limitCommonView').hidden = isAll;
+      $('limitAllView').hidden = !isAll;
+      $('limitPrompt').setAttribute('aria-labelledby', isAll ? 'promptAllTitle' : 'promptTitle');
+    }
+
+    function highlightLimitButtons() {
+      const current = state.stickyLimit;
+      document.querySelectorAll('#limitPrompt [data-limit]').forEach(btn => {
+        btn.classList.toggle('picked', current != null && Number(btn.dataset.limit) === current);
+      });
+    }
+
     function openPrompt(id, hint, mode) {
       promptCellId = id || currentCellId || null;
       promptMode = mode || 'set';
@@ -2321,11 +2394,14 @@
           : '') +
           'Applies along this stretch and into unknown road until you change it.';
       }
+      showLimitView('common');
+      highlightLimitButtons();
       $('limitPrompt').classList.add('show');
     }
 
     function closePrompt() {
       $('limitPrompt').classList.remove('show');
+      showLimitView('common');
       promptCellId = null;
       promptMode = 'set';
     }
@@ -2704,10 +2780,12 @@
     });
 
     $('promptOther').addEventListener('click', () => {
-      const raw = prompt('Enter limit km/h (e.g. 50, 70, 90):', String(state.stickyLimit || 50));
-      const n = Number(raw);
-      if (!raw || Number.isNaN(n) || n < 10 || n > 130) return;
-      confirmLimit(Math.round(n));
+      showLimitView('all');
+      highlightLimitButtons();
+    });
+
+    $('promptBackCommon').addEventListener('click', () => {
+      showLimitView('common');
     });
 
     $('zoneList').addEventListener('click', e => {
